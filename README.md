@@ -11,10 +11,10 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - 7 continents with biome-specific terrain (tundra, desert, jungle, mountains, ocean)
 - Terrain speed system with Dijkstra pathfinding (mountains = slow, roads = fast, spatial indexing for O(1) neighbor lookups)
 - Auto-generated roads between cities using A* (land-only, no ocean crossing)
-- Railroads: dwarves upgrade roads for ultra-fast travel (3 iron + 2 wood per tile)
+- 3-tier road system: gravel (🟫 1 stone) → asphalt (⬛ 2 stone + 1 iron) → railroad (🔲 3 iron + 2 wood), each progressively faster
 - **Persistent terrain**: all tile changes (builds, farms, roads, mines, designations) saved as deltas and restored on reload
 - **Loop Hero rendering**: adjacent same-type terrain tiles grouped into larger squares with scaled emojis (greedy cover, world-aligned for scroll stability)
-- **Graves** (🪦): dwarves leave a tombstone on the map where they died
+- **Named graves**: dwarves leave a randomized tombstone (🪦💀☠️⚰️🕯️) with their name permanently on the map; click to see who rests there
 - Per-city resources and culturally-named populations
 - Cities auto-expand when population and resources allow (beds, stockpiles, tables)
 

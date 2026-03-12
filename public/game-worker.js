@@ -8,12 +8,12 @@ const T = {
   MUSHROOM:16,FARM:17,CITY:18,D_MINE:19,D_BUILD:20,D_FARM:21,
   IRON_ORE:22,GOLD_VEIN:23,GEMS:24,BERRY_BUSH:25,HERB_PATCH:26,CLAY:27,
   FISH_SPOT:28,DEER:29,CORAL:30,CRAB:31,ROAD:32,D_ROAD:33,RAILROAD:34,
-  GRAVE:35
+  GRAVE:35,ASPHALT:36
 };
 const WALKABLE = new Set([
   T.TUNDRA,T.TAIGA,T.FOREST,T.PLAINS,T.DESERT,T.JUNGLE,T.HILL,T.BEACH,T.MOUNTAIN,
   T.FLOOR,T.STOCKPILE,T.BED,T.TABLE,T.DOOR,T.MUSHROOM,T.FARM,T.CITY,
-  T.D_MINE,T.D_FARM,T.D_ROAD,T.ROAD,T.RAILROAD,
+  T.D_MINE,T.D_FARM,T.D_ROAD,T.ROAD,T.ASPHALT,T.RAILROAD,
   T.BERRY_BUSH,T.HERB_PATCH,T.CLAY,T.DEER,T.CRAB,
   T.GRAVE
 ]);
@@ -28,7 +28,7 @@ const TERRAIN_PROPS = {
   [T.STOCKPILE]:{speed:1},[T.BED]:{speed:1},[T.TABLE]:{speed:1},[T.DOOR]:{speed:1},
   [T.MUSHROOM]:{speed:1},[T.FARM]:{speed:1},[T.CITY]:{speed:1},
   [T.D_MINE]:{speed:1},[T.D_BUILD]:{speed:0},[T.D_FARM]:{speed:1},[T.D_ROAD]:{speed:1},
-  [T.ROAD]:{speed:0.5},[T.IRON_ORE]:{speed:4},[T.GOLD_VEIN]:{speed:4},[T.GEMS]:{speed:4},
+  [T.ROAD]:{speed:0.7},[T.ASPHALT]:{speed:0.4},[T.IRON_ORE]:{speed:4},[T.GOLD_VEIN]:{speed:4},[T.GEMS]:{speed:4},
   [T.BERRY_BUSH]:{speed:1},[T.HERB_PATCH]:{speed:1},[T.CLAY]:{speed:1},
   [T.FISH_SPOT]:{speed:0},[T.DEER]:{speed:1},[T.CORAL]:{speed:0},[T.CRAB]:{speed:1},
   [T.RAILROAD]:{speed:0.2},
@@ -101,15 +101,25 @@ const G = {
   dwarves:[], usedNames:new Set(),
   animals:[], animalGrid:{},
   ships:[], stats:{mined:0,built:0,farmed:0},
+  graves:{},
   homeCity:null, aiCityIndex:0, dwarfGrid:{},
   mapDeltas:{},
 };
 
 // Message buffers
-const pendingLogs = [], pendingToasts = [], pendingMapChanges = [];
+const pendingLogs = [], pendingToasts = [], pendingMapChanges = [], pendingGraves = [];
 function log(msg, type, rarity, cityEmoji, lx, ly) { pendingLogs.push({msg,type,rarity:rarity||1,season:G.season,cityEmoji:cityEmoji||null,lx:lx??null,ly:ly??null}); }
 function mapSet(x, y, tile) { G.map[y][x] = tile; G.mapDeltas[`${x},${y}`] = tile; pendingMapChanges.push({x,y,tile}); }
-function placeGrave(d) { const wx = wrapX(d.x); if (G.map[d.y] && G.map[d.y][wx] !== T.OCEAN) mapSet(wx, d.y, T.GRAVE); }
+const GRAVE_EMOJIS = ['🪦','💀','☠️','⚰️','🕯️'];
+function placeGrave(d) {
+  const wx = wrapX(d.x);
+  if (G.map[d.y] && G.map[d.y][wx] !== T.OCEAN) {
+    mapSet(wx, d.y, T.GRAVE);
+    const gd = {name:d.name, emoji:GRAVE_EMOJIS[Math.floor(Math.random()*GRAVE_EMOJIS.length)]};
+    G.graves[`${wx},${d.y}`] = gd;
+    pendingGraves.push({x:wx, y:d.y, ...gd});
+  }
+}
 
 // Helpers
 function wrapX(x) { return ((x % MAP_W) + MAP_W) % MAP_W; }
@@ -625,11 +635,12 @@ function aiIdle(d) {
       }
     }
   }
-  if (res.iron >= 3 && res.wood >= 2 && Math.random() < 0.15) {
-    const rrp = bfs(d.x, d.y, (x,y) => G.map[y][x] === T.ROAD, false);
+  if (((res.stone >= 2 && res.iron >= 1) || (res.iron >= 3 && res.wood >= 2)) && Math.random() < 0.15) {
+    const rrp = bfs(d.x, d.y, (x,y) => G.map[y][x] === T.ROAD || G.map[y][x] === T.ASPHALT, false);
     if (rrp && rrp.length < 30) {
       const last = rrp[rrp.length-1];
-      if (G.map[last[1]][last[0]] === T.ROAD) {
+      const lt = G.map[last[1]][last[0]];
+      if (lt === T.ROAD || lt === T.ASPHALT) {
         d.target = {type:'upgrade_road',x:last[0],y:last[1]}; d.path = rrp; d.state = 'walk'; return;
       }
     }
@@ -755,13 +766,18 @@ function aiBuild(d) {
       d.happiness = Math.min(100, d.happiness + 3);
     } else if (G.map[y][x] === T.D_ROAD && res.stone >= 1) {
       res.stone -= 1; mapSet(x, y, T.ROAD); G.stats.built++;
-      log(`${d.name} 🛤️ built a road`, 'build', 1);
+      log(`${d.name} 🟫 built a gravel road`, 'build', 1);
       addEvent(d, 'build', 'Built a road');
       d.happiness = Math.min(100, d.happiness + 2);
-    } else if (d.target.type === 'upgrade_road' && G.map[y][x] === T.ROAD && res.iron >= 3 && res.wood >= 2) {
+    } else if (d.target.type === 'upgrade_road' && G.map[y][x] === T.ROAD && res.stone >= 2 && res.iron >= 1) {
+      res.stone -= 2; res.iron -= 1; mapSet(x, y, T.ASPHALT); G.stats.built++;
+      log(`${d.name} ⬛ paved road to asphalt!`, 'build', 2);
+      addEvent(d, 'build', 'Paved road to asphalt');
+      d.happiness = Math.min(100, d.happiness + 3);
+    } else if (d.target.type === 'upgrade_road' && G.map[y][x] === T.ASPHALT && res.iron >= 3 && res.wood >= 2) {
       res.iron -= 3; res.wood -= 2; mapSet(x, y, T.RAILROAD); G.stats.built++;
-      log(`${d.name} 🚂 upgraded road to railroad!`, 'build', 3);
-      addEvent(d, 'build', 'Upgraded road to railroad');
+      log(`${d.name} 🔲 upgraded to railroad!`, 'build', 3);
+      addEvent(d, 'build', 'Upgraded to railroad');
       d.happiness = Math.min(100, d.happiness + 5);
     }
     d.target = null; d.timer = 0; d.state = 'idle';
@@ -1680,6 +1696,7 @@ function getSerializableState() {
       cargo:s.cargo,state:s.state,
     })),
     mapDeltas:G.mapDeltas,
+    graves:G.graves,
   };
 }
 
@@ -1708,6 +1725,7 @@ self.onmessage = function(e) {
       G.homeCity = CITIES.find(c => c.id === data.state?.homeCityId) || CITIES[0];
       G.aiCityIndex = data.state?.aiCityIndex || 0;
       G.mapDeltas = data.state?.mapDeltas || {};
+      G.graves = data.state?.graves || {};
       // Restore dwarf paths/targets to empty (they were stripped for transfer)
       for (const d of G.dwarves) {
         if (!d.path) d.path = [];
@@ -1856,6 +1874,7 @@ function startTickLoop() {
       logs:pendingLogs.splice(0),
       toasts:pendingToasts.splice(0),
       mapChanges:pendingMapChanges.splice(0),
+      newGraves:pendingGraves.splice(0),
     });
 
     const interval = Math.max(33, Math.floor(100 / G.speed));
