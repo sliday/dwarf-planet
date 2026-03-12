@@ -1538,9 +1538,11 @@ function tickDwarf(d) {
     return;
   }
 
-  if (d.hunger < 20 && d.state !== 'eating' && d.state !== 'going_eat') {
+  if (d.hunger < 20 && d.state !== 'eating' && d.state !== 'going_eat'
+      && d.state !== 'wander' && d.state !== 'seek_food') {
     d.state = 'seek_food'; d.target = null; d.path = [];
-  } else if (d.energy < 15 && d.state !== 'sleeping' && d.state !== 'going_sleep') {
+  } else if (d.energy < 15 && d.state !== 'sleeping' && d.state !== 'going_sleep'
+      && d.state !== 'wander' && d.state !== 'seek_sleep') {
     d.state = 'seek_sleep'; d.target = null; d.path = [];
   }
 
@@ -2394,6 +2396,8 @@ function trySeaSailing(d) {
 }
 
 function aiSeekFood(d) {
+  if (d._tickSlot === undefined) d._tickSlot = G.dwarves.indexOf(d) % 4;
+  if (G.tick % 4 !== d._tickSlot) return;
   const res = cityOf(d).res || { food: 0 };
   const mp = bfs(d.x, d.y, (x, y) => WILD_FOOD.has(G.map[y][x]), true);
   if (mp && mp.length < 25) {
@@ -2408,9 +2412,9 @@ function aiSeekFood(d) {
     d.target = { type: 'eat', src: 'stockpile' };
     d.state = 'eating'; d.timer = 0; return;
   }
-  log(`${d.name} 😫 is starving!`, 'system');
+  log(`${d.name} \uD83D\uDE2B is starving!`, 'system');
   addEvent(d, 'starve', 'Starving - no food available');
-  d.state = 'wander'; d.timer = 15;
+  d.state = 'wander'; d.timer = 40 + Math.floor(Math.random() * 40);
 }
 
 function aiEat(d) {
