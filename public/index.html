@@ -3597,9 +3597,9 @@ function render() {
         const phase = Math.sin(wx * 0.6 + gy * 0.4 + now * 1.5) * 0.5 + 0.5;
         const foamDepth = 2 + Math.floor(phase * 3);
         ctx.fillStyle = `rgba(200,230,255,${0.15 + phase * 0.15})`;
-        const h = (wx * 7 + gy * 13 + dx * 3) | 0;
+        const fh = (wx * 7 + gy * 13 + dx * 3) | 0;
         for (let d = 0; d < foamDepth; d++) {
-          const bits = (h * (d + 1) * 0x45d9f3b) >>> 0;
+          const bits = (fh * (d + 1) * 0x45d9f3b) >>> 0;
           for (let i = 0; i < TILE; i++) {
             if (!((bits >>> (i & 7)) & 1)) continue;
             if (horiz) {
