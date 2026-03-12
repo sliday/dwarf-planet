@@ -1330,7 +1330,7 @@ function autoConnectCities() {
   }
   if (roadsBuilt > 0) {
     G.roadGraphDirty = true;
-    log(`👣 Path cleared connecting ${cityA.name} ↔ ${cityB.name} (${roadsBuilt} tiles)`, 'city', 4);
+    log(`👣 Path cleared connecting ${cityA.name} ↔ ${cityB.name} (${roadsBuilt} tiles)`, 'city', 4, null, cityA.mx, cityA.my);
   }
 }
 
@@ -1408,21 +1408,21 @@ function spawnVehicles() {
       const carts = pairVehicles.filter(v => v.type === 'cart');
       if (carts.length < 1 && G.vehicles.length < MAX_VEHICLES) {
         G.vehicles.push(createVehicle('cart', cityA.mx, cityA.my, cityA.id));
-        log(`${cityA.name} \uD83D\uDC34 built a horse cart for trade with ${cityB.name}`, 'city', 3);
+        log(`${cityA.name} \uD83D\uDC34 built a horse cart for trade with ${cityB.name}`, 'city', 3, null, cityA.mx, cityA.my);
       }
     }
     if (tiers.asphalt) {
       const cars = pairVehicles.filter(v => v.type === 'car');
       if (cars.length < 2 && G.vehicles.length < MAX_VEHICLES) {
         G.vehicles.push(createVehicle('car', cityA.mx, cityA.my, cityA.id));
-        log(`${cityA.name} \uD83D\uDE97 manufactured a car for trade with ${cityB.name}`, 'city', 3);
+        log(`${cityA.name} \uD83D\uDE97 manufactured a car for trade with ${cityB.name}`, 'city', 3, null, cityA.mx, cityA.my);
       }
     }
     if (tiers.railroad) {
       const trains = pairVehicles.filter(v => v.type === 'train');
       if (trains.length < 1 && G.vehicles.length < MAX_VEHICLES) {
         G.vehicles.push(createVehicle('train', cityA.mx, cityA.my, cityA.id));
-        log(`${cityA.name} \uD83D\uDE82 commissioned a train for the ${cityB.name} line`, 'city', 4);
+        log(`${cityA.name} \uD83D\uDE82 commissioned a train for the ${cityB.name} line`, 'city', 4, null, cityA.mx, cityA.my);
       }
     }
   }
@@ -1448,7 +1448,7 @@ function tryBuildShip(city) {
   const ship = createShip(launchX, launchY, null, city.id);
   G.ships.push(ship);
   beachShip(ship);
-  log(`${city.name} ⛵ built a ship!`, 'city', 5);
+  log(`${city.name} ⛵ built a ship!`, 'city', 5, null, city.mx, city.my);
   return ship;
 }
 
@@ -1900,7 +1900,7 @@ function tickSeason() {
         if (factoryCount > 0 && r.iron >= 5 && r.wood >= 3) {
           r.iron -= 5; r.wood -= 3;
           G.vehicles.push(createVehicle('car', city.mx, city.my, city.id));
-          log(`${city.name} \uD83C\uDFED factory produced a \uD83D\uDE97 car!`, 'city', 3);
+          log(`${city.name} \uD83C\uDFED factory produced a \uD83D\uDE97 car!`, 'city', 3, null, city.mx, city.my);
         }
       }
       // Generate per-city year resolutions
@@ -2001,7 +2001,7 @@ function tickSeason() {
                 else if (pick === 2 && r.wood >= 2) { mapSet(x,y,T.TABLE); r.wood -= 2; r.tables++; expanded++; }
                 else if (r.stone >= 1) { mapSet(x,y,T.FLOOR); r.stone -= 1; expanded++; }
               }
-          if (expanded > 0) log(`🏘️ ${city.name} expanded! (+${expanded} structures)`, 'city', 4);
+          if (expanded > 0) log(`🏘️ ${city.name} expanded! (+${expanded} structures)`, 'city', 4, null, city.mx, city.my);
         }
       }
 
@@ -2039,7 +2039,7 @@ function tickSeason() {
               if (!adjBuilding) continue;
               r.stone -= 10; r.iron -= 8; r.wood -= 5;
               mapSet(x, y, T.FACTORY);
-              log(`${city.name} \uD83C\uDFED built a factory!`, 'city', 5);
+              log(`${city.name} \uD83C\uDFED built a factory!`, 'city', 5, null, city.mx, city.my);
               placed = true;
             }
       }

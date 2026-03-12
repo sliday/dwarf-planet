@@ -3277,6 +3277,12 @@ function linkifyDwarfNames(msg) {
         `<span class="log-dwarf" data-did="${d.id}" style="cursor:pointer;text-decoration:underline;color:#83a598">${d.name}</span>`);
     }
   }
+  for (const c of CITIES) {
+    if (c.mx === undefined || !msg.includes(c.name)) continue;
+    const safe = c.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    msg = msg.replace(new RegExp(safe, 'g'),
+      `<span class="log-city" data-cx="${c.mx}" data-cy="${c.my}" style="cursor:pointer;text-decoration:underline;color:#fabd2f">${c.name}</span>`);
+  }
   return msg;
 }
 
@@ -3316,6 +3322,12 @@ document.getElementById('log-body').addEventListener('click', (e) => {
     G.cam.y = d.y * TILE - canvas.height / 2;
     showDwarfInspector(d);
     if (isMobile) inspPanel.classList.add('open'); else inspPanel.style.display = 'block';
+    return;
+  }
+  const cityEl = e.target.closest('.log-city');
+  if (cityEl) {
+    G.cam.x = parseInt(cityEl.dataset.cx) * TILE - canvas.width / 2;
+    G.cam.y = parseInt(cityEl.dataset.cy) * TILE - canvas.height / 2;
     return;
   }
   const entry = e.target.closest('.log-entry[data-lx]');
