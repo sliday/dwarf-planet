@@ -57,6 +57,15 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - Contextual Mine/Build/Farm/Road actions in dwarf inspector
 - Splash screen for new visitors + in-game mechanics guide
 
+### Performance
+- BFS pathfinding capped at 2000 steps (covers ~44x44 area)
+- Tick stagger: only 1/4 of dwarves compute AI per tick
+- Spatial index (8-tile grid buckets) for O(1) neighbor lookups in sharing/trading
+- Throttled food search with wander cooldown to prevent BFS spam
+- Frame tick cap of 3 prevents lag death spiral
+- Cached measureText for city labels, hoisted Set constants
+- Backstory request queue (2-5s spacing) prevents API rate limit floods
+
 ### AI
 - 4-tier model routing (simple/medium/complex/premium) via OpenRouter
 - Fire-and-forget AI calls: game never blocks on responses
