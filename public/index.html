@@ -593,7 +593,7 @@ const TILE_NAMES = {
   [T.IRON_ORE]: '⚙️ Iron Ore', [T.GOLD_VEIN]: '✨ Gold Vein', [T.GEMS]: '💎 Gems',
   [T.BERRY_BUSH]: '🫐 Berry Bush', [T.HERB_PATCH]: '🌿 Herb Patch', [T.CLAY]: '🏺 Clay',
   [T.FISH_SPOT]: '🐟 Fish', [T.DEER]: '🦌 Wild Game', [T.CORAL]: '🪸 Coral', [T.CRAB]: '🦀 Crabs',
-  [T.PATH]: '👣 Dirt Path', [T.ROAD]: '🟫 Gravel Road', [T.D_ROAD]: '🚧 Road (planned)', [T.ASPHALT]: '⬛ Asphalt Road', [T.RAILROAD]: '🟰 Railroad',
+  [T.PATH]: '👣 Dirt Path', [T.ROAD]: '🟫 Gravel Road', [T.D_ROAD]: '🚧 Road (planned)', [T.ASPHALT]: '⬛ Asphalt Road', [T.RAILROAD]: '# Railroad',
   [T.FACTORY]: '🏭 Factory'
 };
 
@@ -985,14 +985,11 @@ function getRailImg(size = 1) {
   const c = document.createElement('canvas');
   c.width = s; c.height = s;
   const cx = c.getContext('2d');
-  cx.save();
-  cx.translate(s / 2, s / 2);
-  cx.rotate(Math.PI / 2);
-  cx.font = `${s - 4}px serif`;
+  cx.font = `bold ${s - 2}px monospace`;
   cx.textAlign = 'center';
   cx.textBaseline = 'middle';
-  cx.fillText('🟰', 0, 1);
-  cx.restore();
+  cx.fillStyle = '#888';
+  cx.fillText('#', s / 2, s / 2 + 1);
   railCache[size] = c;
   return c;
 }
