@@ -934,7 +934,7 @@ function aiWalk(d) {
     if (!d.target) { d.state = 'idle'; return; }
     const tt = d.target.type;
     if (tt === 'mine' || tt === 'chop') d.state = 'mining';
-    else if (tt === 'build' || tt === 'road' || tt === 'upgrade_road') d.state = 'building';
+    else if (tt === 'build' || tt === 'road' || tt === 'upgrade_road' || tt === 'fix_road') d.state = 'building';
     else if (tt === 'farm') d.state = 'farming';
     else if (tt === 'gather') d.state = 'gathering';
     else if (tt === 'eat') d.state = 'eating';

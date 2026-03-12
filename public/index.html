@@ -3340,8 +3340,8 @@ function ditherEdges(ctx, px, py, wx, wy) {
     const sameType = nt === t;
     // Same-type: only dither natural terrain to break grid lines
     if (sameType && !NATURAL_TERRAIN.has(t)) continue;
-    // Shore dithering: 2x depth where beach meets ocean
-    const depth = nt === T.OCEAN ? 8 : sameType ? 2 : 4;
+    // Shore dithering: wider where beach meets ocean
+    const depth = nt === T.OCEAN ? 6 : sameType ? 2 : 4;
     const nBase = BG_COLORS[nt] || '#042040';
     ctx.fillStyle = varyColor(nBase, nx, ny);
     const h = tileHash(wx * 7 + dx, wy * 13 + dy);
