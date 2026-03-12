@@ -33,6 +33,16 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - Starvation mechanics: 30-day hunger → immobility → 10-day rescue window → death
 - Rescue AI: dwarves carrying food path toward starving city-mates
 
+### Wildlife
+- 24 animal species across all biomes: cats, dogs, wolves, bears, eagles, sharks, whales, dolphins, and more
+- Up to 400 animals roaming the world simultaneously
+- **Ocean animals**: sharks, whales, and dolphins swim freely in ocean tiles with dedicated water movement
+- **Terrain-specific spawning**: each species spawns only in matching biomes (penguins in tundra, camels in desert, gorillas in jungle)
+- **Combat encounters**: dangerous animals (wolves, bears, sharks) attack nearby dwarves; dwarves fight back using STR
+- **Pets**: cats, dogs, and parrots can be tamed by dwarves
+- **Hunting**: dwarves gain food from killed animals based on species size
+- Eagles soar over mountains and hills; crocodiles lurk in jungles and beaches
+
 ### Crafting (Infinite Craft)
 - Combine any two items to create new ones (Water + Fire = Steam)
 - 296 base items seeded from InfiniteCraftWiki (depth 1-6)
@@ -120,14 +130,14 @@ Pay to upgrade a dwarf's AI reasoning tier via Polar.sh. Sponsored dwarves get a
 - **AI:** OpenRouter via Vercel AI SDK v6 + Zod v4 schemas
 - **Payments:** Polar.sh (@polar-sh/sdk)
 - **Frontend:** Vanilla JS canvas + DAUB UI (grunge theme)
-- **Tests:** Vitest (316 tests across 19 files)
+- **Tests:** Vitest (338 tests across 20 files)
 
 ## Development
 
 ```bash
 npm install
 npm run dev              # local dev server
-npm test                 # run 316 tests
+npm test                 # run 338 tests
 npm run test:watch       # vitest watch mode
 npm run db:migrate:local # apply D1 migrations locally
 npm run db:migrate:remote # apply D1 migrations to production
@@ -181,5 +191,5 @@ src/guardrails/        # Budget + rate limiting
 src/db/state.ts        # D1 state persistence
 migrations/            # D1 SQL migrations
 scripts/               # Import/seed scripts
-tests/                 # 19 test files, 316 tests
+tests/                 # 20 test files, 338 tests
 ```
