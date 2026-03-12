@@ -3408,6 +3408,7 @@ function patchTile(gx, gy) {
   } else {
     let em = EMOJI[t];
     if (t === T.GRAVE) { const gd = G.graves[`${wx},${wy}`]; if (gd) em = gd.emoji; }
+    if (t === T.BEACH && (wy <= 250 || wy >= 750)) em = null;
     if (em && t !== T.OCEAN) {
       try { tileBufferCtx.drawImage(getEmojiImg(em), px, py); } catch (e) {}
     }
@@ -3506,6 +3507,7 @@ function renderTileBuffer(startGX, startGY, endGX, endGY) {
       } else {
         let em = EMOJI[t];
         if (t === T.GRAVE && bestN === 1) { const gd = G.graves[`${wrapX(startGX + c)},${wrapY(startGY + r)}`]; if (gd) em = gd.emoji; }
+        if (t === T.BEACH) { const wy = wrapY(startGY + r); if (wy <= 250 || wy >= 750) em = null; }
         if (em && t !== T.OCEAN) {
           try { tileBufferCtx.drawImage(getEmojiImg(em, bestN), px, py); } catch (e) {}
         }
