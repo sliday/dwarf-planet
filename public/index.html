@@ -55,7 +55,9 @@
     position: absolute; top: 0; left: 0; right: 0;
     display: flex; justify-content: center; gap: 48px;
     padding: 8px 20px;
-    background: linear-gradient(to bottom, rgba(29,32,33,0.95), rgba(29,32,33,0));
+    background: linear-gradient(to bottom,
+      hsla(var(--season-hue, 0), var(--season-sat, 0%), 15%, 0.95),
+      hsla(var(--season-hue, 0), var(--season-sat, 0%), 15%, 0));
     pointer-events: none; z-index: 10;
   }
   .hud-stat { text-align: center; }
@@ -89,7 +91,7 @@
     scrollbar-width: thin; scrollbar-color: #504945 transparent;
   }
   .log-entry { padding: 2px 0; display: flex; gap: 8px; }
-  .log-entry .ts { color: #665c54; min-width: 70px; flex-shrink: 0; }
+  .log-entry .ts { color: #665c54; min-width: 36px; flex-shrink: 0; }
   .log-entry.t-mine .msg { color: #fabd2f; }
   .log-entry.t-build .msg { color: #83a598; }
   .log-entry.t-eat .msg { color: #fe8019; }
@@ -98,6 +100,7 @@
   .log-entry.t-system .msg { color: #b8bb26; }
   .log-entry.t-farm .msg { color: #8ec07c; }
   .log-entry.t-city .msg { color: #d3869b; }
+  .log-entry.t-combat .msg { color: #fb4934; }
   .log-entry.t-trade .msg { color: #d79921; }
   .log-entry.t-craft .msg { color: #b16286; }
 
@@ -111,6 +114,9 @@
   .controls .section-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #a89984; }
   .speed-slider-row { display: flex; align-items: center; gap: 6px; }
   .speed-label { font-size: 12px; color: #a89984; min-width: 20px; text-align: center; }
+  .pause-btn { cursor: pointer; user-select: none; }
+  .pause-btn:hover { color: #ebdbb2; }
+  .pause-btn.active { color: #fb4934; }
   .ctrl-slider {
     -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
     background: #504945; border-radius: 2px; outline: none;
@@ -135,7 +141,7 @@
     position: absolute; bottom: 0; left: 0; right: 0; height: 24px;
     display: flex; align-items: center; justify-content: space-between;
     padding: 0 12px; font-size: 11px; color: #a89984; font-weight: 600;
-    background: rgba(29,32,33,0.95); border-top: 1px solid #3c3836;
+    background: hsla(var(--season-hue, 0), var(--season-sat, 0%), 12%, 0.92); border-top: 1px solid #3c3836;
     z-index: 10;
   }
 
@@ -237,6 +243,17 @@
   .mobile .minimap { width: 100px; height: 50px; opacity: 0.7; }
   @media (max-width: 430px) { .mobile .minimap { display: none; } }
 
+  #year-banner {
+    position: absolute; top: 70px; left: 12px; z-index: 15;
+    background: rgba(29,32,33,0.92); border: 1px solid #504945; border-radius: 6px;
+    padding: 10px 16px; max-width: 320px; font-size: 12px; color: #ebdbb2;
+    opacity: 1; transition: opacity 1s ease-out; pointer-events: none;
+  }
+  #year-banner.hidden { opacity: 0; }
+  #year-banner h3 { margin: 0 0 6px; font-size: 16px; color: #fabd2f; }
+  #year-banner .res-line { padding: 2px 0; color: #a89984; font-size: 11px; }
+  #year-banner .res-line .emoji { margin-right: 4px; }
+
   .mobile .status-bar { display: none; }
 
   .mobile-cancel-btn { display: none; }
@@ -277,12 +294,13 @@
   <div class="hud-stat" id="hud-sponsored-wrap" style="cursor:pointer" title="Click to see sponsored dwarves"><div class="label">Sponsored</div><div class="value" id="h-sponsored" style="font-size:16px;color:#fabd2f">$0</div></div>
 </div>
 
+<div id="year-banner" class="hidden"></div>
 <canvas class="minimap" id="minimap" width="250" height="125"></canvas>
 <div class="event-log">
   <div class="log-header">
     <span>Event Log</span>
     <span class="log-rarity-wrap">
-      <input type="range" id="log-rarity" min="1" max="4" value="1" class="ctrl-slider" style="width:60px" title="Filter: Common → Rare">
+      <input type="range" id="log-rarity" min="1" max="5" value="1" class="ctrl-slider" style="width:60px" title="Filter: Common → Epic">
       <span id="log-rarity-label" style="font-size:9px;min-width:30px">All</span>
     </span>
     <button id="btn-clear-log" title="Clear">&#x1f5d1;</button>
@@ -292,11 +310,11 @@
 
 <div class="controls">
   <div class="speed-slider-row">
-    <span class="speed-label">&#x23f8;</span>
+    <span class="speed-label pause-btn" id="btn-pause" title="Pause/Resume">&#x23f8;</span>
     <input type="range" id="speed-slider" min="0" max="3" value="1" class="ctrl-slider">
     <span class="speed-label" id="speed-val">1x</span>
   </div>
-  <div class="section-label">Designate</div>
+  <div class="section-label">Click and draw to create:</div>
   <div class="action-row">
     <button class="action-btn" id="btn-mine" title="Drag on map to mark mountains/hills for mining">&#x26cf; Mine</button>
     <button class="action-btn" id="btn-room" title="Drag on map to mark areas for wall construction">&#x1f9f1; Build</button>
@@ -480,6 +498,7 @@ const TERRAIN_PROPS = {
 };
 
 const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
+const SEASON_EMOJIS = ['\u{1F331}','\u2600\uFE0F','\u{1F342}','\u2744\uFE0F'];
 
 const RES_NAMES = { food:'Food', wood:'Wood', stone:'Stone', iron:'Iron', gold:'Gold', cloth:'Cloth', ale:'Ale', herbs:'Herbs', beds:'Beds', tables:'Tables' };
 const RES_ICONS = [['🍖','food'],['🪵','wood'],['🪨','stone'],['⚔️','iron'],['🪙','gold'],['🧵','cloth'],['🍺','ale'],['🌿','herbs'],['🛏️','beds'],['🪑','tables']];
@@ -867,7 +886,8 @@ const G = {
   map: [], tick: 0, speed: 1, paused: false,
   year: 1, season: 0,
   dwarves: [], usedNames: new Set(),
-  ships: [], // Array of ship objects
+  ships: [],
+  animals: [],
   stats: { mined: 0, built: 0, farmed: 0 },
   cam: { x: 0, y: 0 },
   mode: 'normal', drag: null, sel: null,
@@ -876,6 +896,14 @@ const G = {
   followDwarf: null,
   zoom: 1.0,
 };
+
+const ANIMAL_EMOJIS = {
+  cat:'\uD83D\uDC31',dog:'\uD83D\uDC36',monkey:'\uD83D\uDC12',wolf:'\uD83D\uDC3A',bear:'\uD83D\uDC3B',
+  snake:'\uD83D\uDC0D',rabbit:'\uD83D\uDC07',fox:'\uD83E\uDD8A',eagle:'\uD83E\uDD85',penguin:'\uD83D\uDC27',
+  camel:'\uD83D\uDC2A',gorilla:'\uD83E\uDD8D',boar:'\uD83D\uDC17',scorpion:'\uD83E\uDD82',
+};
+const ANIMAL_DANGER = {monkey:1,wolf:1,bear:1,snake:1,fox:1,eagle:1,gorilla:1,boar:1,scorpion:1};
+const ANIMAL_PET = {cat:1,dog:1};
 
 const isMobile = 'ontouchstart' in window;
 if (isMobile) { document.body.classList.add('mobile'); G.zoom = 1.5; }
@@ -1689,6 +1717,12 @@ function tickDwarf(d) {
     }
   }
 
+  // HP system
+  if (!d.maxHp) { d.maxHp = 8 + Math.floor((d.stats?.CON||10)/3); d.hp = d.hp ?? d.maxHp; d.ac = d.ac ?? 10+Math.floor(((d.stats?.DEX||10)-10)/2); }
+  if (d.hp <= 0) { d.state = 'dead'; d.dead = true; log(`${d.name} \u2620\uFE0F has died!`, 'system'); addEvent(d, 'death', 'Died in combat'); return; }
+  if (d.poisonTicks > 0) { d.hp -= 1; d.poisonTicks--; }
+  if (d.hp < d.maxHp && d.hunger > 20 && d.energy > 30 && G.tick % 50 === 0) d.hp = Math.min(d.maxHp, d.hp + 1);
+
   d.hunger = Math.max(0, d.hunger - 0.03);
   d.energy = Math.max(0, d.energy - 0.02);
   d.happiness = Math.max(0, Math.min(100, d.happiness - 0.005));
@@ -1822,9 +1856,9 @@ function tryTrade(d) {
       const give = d.inventory.shift();
       const get1 = other.inventory.shift();
       const get2 = other.inventory.length > 0 ? other.inventory.shift() : null;
-      if (give) other.inventory.push(give);
-      if (get1) d.inventory.push(get1);
-      if (get2) d.inventory.push(get2);
+      if (give && other.inventory.length < MAX_INVENTORY) other.inventory.push(give);
+      if (get1 && d.inventory.length < MAX_INVENTORY) d.inventory.push(get1);
+      if (get2 && d.inventory.length < MAX_INVENTORY) d.inventory.push(get2);
       const gaveStr = give ? give.emoji + give.name : '?';
       const gotStr = [get1, get2].filter(Boolean).map(i => i.emoji + i.name).join(', ') || '?';
       log(`${d.name} \uD83E\uDD1D outsmarted ${other.name}: gave ${gaveStr}, got ${gotStr}`, 'trade');
@@ -1835,9 +1869,9 @@ function tryTrade(d) {
       const give1 = d.inventory.shift();
       const give2 = d.inventory.length > 0 ? d.inventory.shift() : null;
       const get = other.inventory.shift();
-      if (give1) other.inventory.push(give1);
-      if (give2) other.inventory.push(give2);
-      if (get) d.inventory.push(get);
+      if (give1 && other.inventory.length < MAX_INVENTORY) other.inventory.push(give1);
+      if (give2 && other.inventory.length < MAX_INVENTORY) other.inventory.push(give2);
+      if (get && d.inventory.length < MAX_INVENTORY) d.inventory.push(get);
       const gaveStr = [give1, give2].filter(Boolean).map(i => i.emoji + i.name).join(', ') || '?';
       const gotStr = get ? get.emoji + get.name : '?';
       log(`${other.name} \uD83E\uDD1D outsmarted ${d.name}: ${d.name} gave ${gaveStr}, got ${gotStr}`, 'trade');
@@ -1847,8 +1881,8 @@ function tryTrade(d) {
       // Equal 1:1 swap
       const give = d.inventory.shift();
       const get = other.inventory.shift();
-      if (give) other.inventory.push(give);
-      if (get) d.inventory.push(get);
+      if (give && other.inventory.length < MAX_INVENTORY) other.inventory.push(give);
+      if (get && d.inventory.length < MAX_INVENTORY) d.inventory.push(get);
       const gaveStr = give ? give.emoji + give.name : '?';
       const gotStr = get ? get.emoji + get.name : '?';
       log(`${d.name} \uD83E\uDD1D traded with ${other.name}: ${gaveStr} \u2194 ${gotStr}`, 'trade');
@@ -2380,6 +2414,138 @@ function tickShips() {
   for (const ship of G.ships) tickShip(ship);
 }
 
+// ---- Animals (fallback single-thread) ----
+const ANIMAL_TYPES_FB = {
+  cat:{hp:4,ac:12,atk:0,dmg:0,speed:0.3,food:1,danger:false,pet:true,terrain:[T.PLAINS,T.FOREST,T.ROAD]},
+  dog:{hp:6,ac:11,atk:0,dmg:0,speed:0.4,food:2,danger:false,pet:true,terrain:[T.PLAINS,T.FOREST,T.ROAD,T.DESERT]},
+  monkey:{hp:5,ac:13,atk:3,dmg:'1d4',speed:0.5,food:2,danger:true,pet:false,terrain:[T.JUNGLE]},
+  wolf:{hp:11,ac:13,atk:4,dmg:'2d4',speed:0.6,food:3,danger:true,pet:false,terrain:[T.FOREST,T.TUNDRA]},
+  bear:{hp:19,ac:11,atk:5,dmg:'2d6',speed:0.3,food:8,danger:true,pet:false,terrain:[T.FOREST,T.MOUNTAIN]},
+  snake:{hp:3,ac:14,atk:3,dmg:'1d4+poison',speed:0.2,food:1,danger:true,pet:false,terrain:[T.JUNGLE,T.DESERT]},
+  rabbit:{hp:2,ac:14,atk:0,dmg:0,speed:0.7,food:2,danger:false,pet:false,terrain:[T.PLAINS,T.FOREST]},
+  fox:{hp:6,ac:13,atk:3,dmg:'1d6',speed:0.6,food:3,danger:true,pet:false,terrain:[T.PLAINS,T.FOREST]},
+  eagle:{hp:5,ac:14,atk:4,dmg:'1d6',speed:0.8,food:2,danger:true,pet:false,terrain:[T.MOUNTAIN]},
+  penguin:{hp:4,ac:10,atk:0,dmg:0,speed:0.3,food:3,danger:false,pet:false,terrain:[T.TUNDRA]},
+  camel:{hp:15,ac:10,atk:0,dmg:0,speed:0.4,food:6,danger:false,pet:false,terrain:[T.DESERT]},
+  gorilla:{hp:20,ac:12,atk:6,dmg:'2d6',speed:0.4,food:5,danger:true,pet:false,terrain:[T.JUNGLE]},
+  boar:{hp:11,ac:12,atk:3,dmg:'1d6',speed:0.5,food:4,danger:true,pet:false,terrain:[T.FOREST,T.PLAINS]},
+  scorpion:{hp:3,ac:15,atk:2,dmg:'1d4+poison',speed:0.2,food:0,danger:true,pet:false,terrain:[T.DESERT]},
+};
+function rollD(n) { return 1 + Math.floor(Math.random() * n); }
+function rollDmg(str) {
+  if (!str || str === 0) return 0;
+  const s = String(str), base = s.replace('+poison','');
+  const m = base.match(/(\d+)d(\d+)/);
+  if (!m) return 0;
+  let total = 0;
+  for (let i = 0; i < parseInt(m[1]); i++) total += rollD(parseInt(m[2]));
+  return total;
+}
+function createAnimal(type, x, y) {
+  const t = ANIMAL_TYPES_FB[type];
+  return {id:'a_'+Math.random().toString(36).slice(2,8),type,x,y,hp:t.hp,maxHp:t.hp,ac:t.ac,state:'idle',target:null,path:[],timer:0,moveTimer:0,owner:null,followTicks:0};
+}
+function tickAnimals() {
+  G.animalGrid = {};
+  for (const a of G.animals) { const key = `${a.x>>3},${a.y>>3}`; (G.animalGrid[key] ??= []).push(a); }
+  for (let i = 0; i < G.animals.length; i++) {
+    if (i % 4 !== G.tick % 4) continue;
+    const a = G.animals[i]; if (a.dead) continue;
+    const t = ANIMAL_TYPES_FB[a.type]; if (!t) continue;
+    a.moveTimer = (a.moveTimer||0) + t.speed; if (a.moveTimer < 1) continue; a.moveTimer -= 1;
+    if (a.owner) {
+      const owner = G.dwarves.find(d => d.id === a.owner);
+      if (!owner || owner.dead) { a.owner = null; continue; }
+      const dx = owner.x - a.x, dy = owner.y - a.y;
+      if (Math.abs(dx)+Math.abs(dy) > 2) { const nx=wrapX(a.x+(dx>0?1:dx<0?-1:0)),ny=a.y+(dy>0?1:dy<0?-1:0); if(isWalkable(nx,ny)){a.x=nx;a.y=ny;} }
+      continue;
+    }
+    const nearby = nearbyDwarves(a.x, a.y);
+    let acted = false;
+    for (const d of nearby) {
+      const ddx = Math.abs(d.x-a.x), ddy = Math.abs(d.y-a.y);
+      if (ddx > 3 || ddy > 3) continue;
+      if (t.danger && ddx <= 2 && ddy <= 2) {
+        if (d.x===a.x && d.y===a.y) { animalCombatFB(a,d); acted=true; break; }
+        const sx=d.x>a.x?1:d.x<a.x?-1:0,sy=d.y>a.y?1:d.y<a.y?-1:0;
+        const nx=wrapX(a.x+sx),ny=a.y+sy; if(isWalkable(nx,ny)){a.x=nx;a.y=ny;} acted=true; break;
+      }
+      if (!t.danger && ddx<=3 && ddy<=3) {
+        const sx=a.x>d.x?1:a.x<d.x?-1:0,sy=a.y>d.y?1:a.y<d.y?-1:0;
+        const nx=wrapX(a.x+(sx||(Math.random()<0.5?1:-1))),ny=a.y+(sy||(Math.random()<0.5?1:-1));
+        if(ny>=0&&ny<MAP_H&&isWalkable(nx,ny)){a.x=nx;a.y=ny;} acted=true; break;
+      }
+    }
+    if (!acted && Math.random()<0.3) {
+      const dirs=[[0,-1],[1,0],[0,1],[-1,0]];
+      const [ddx,ddy]=dirs[Math.floor(Math.random()*4)];
+      const nx=wrapX(a.x+ddx),ny=a.y+ddy;
+      if(ny>=0&&ny<MAP_H&&isWalkable(nx,ny)){a.x=nx;a.y=ny;}
+    }
+  }
+  G.animals = G.animals.filter(a => !a.dead);
+  // Dwarf combat with animals on same tile
+  for (const d of G.dwarves) {
+    if (d.dead || d.state==='sailing') continue;
+    for (const a of (G.animalGrid?.[`${d.x>>3},${d.y>>3}`]||[])) {
+      if (a.dead||a.owner||!ANIMAL_TYPES_FB[a.type]?.danger) continue;
+      if (a.x===d.x&&a.y===d.y) animalCombatFB(a,d);
+      if (d.dead) break;
+    }
+  }
+  // Pet adoption
+  if (G.tick%10===0) {
+    for (const a of G.animals) {
+      if (a.dead||a.owner||!ANIMAL_TYPES_FB[a.type]?.pet) continue;
+      for (const d of nearbyDwarves(a.x,a.y)) {
+        if (d.dead||d.pet) continue;
+        if (Math.abs(d.x-a.x)>2||Math.abs(d.y-a.y)>2) continue;
+        a.followTicks=(a.followTicks||0)+1;
+        if (a.followTicks>=3&&Math.random()<0.2) {
+          a.owner=d.id; d.pet=a.id; d.happiness=Math.min(100,d.happiness+5);
+          log(`${d.name} adopted a ${ANIMAL_EMOJIS[a.type]} ${a.type}!`,'system');
+          break;
+        }
+      }
+    }
+  }
+  if (G.tick%100===0) { for (const d of G.dwarves) { if (!d.pet) continue; const pet=G.animals.find(a=>a.id===d.pet); if(pet&&!pet.dead) d.happiness=Math.min(100,d.happiness+2); else d.pet=null; } }
+}
+function animalCombatFB(a, d) {
+  const t = ANIMAL_TYPES_FB[a.type];
+  if (t.danger && t.atk > 0) {
+    if (rollD(20)+t.atk >= d.ac) {
+      let dmg=rollDmg(t.dmg); if(dmg<1)dmg=1; d.hp-=dmg;
+      if(String(t.dmg).includes('+poison')) d.poisonTicks=(d.poisonTicks||0)+3;
+      log(`${ANIMAL_EMOJIS[a.type]} ${a.type} hit ${d.name} for ${dmg}!`,'combat');
+      if(d.hp<=0){d.dead=true;d.state='dead';log(`${d.name} \u2620\uFE0F killed by ${a.type}!`,'system');addEvent(d,'death',`Killed by ${a.type}`);}
+    }
+  }
+  if (d.hp>0) {
+    const strMod=Math.floor(((d.stats?.STR||10)-10)/2);
+    if(rollD(20)+strMod>=a.ac){let dmg=rollD(8)+strMod;if(dmg<1)dmg=1;a.hp-=dmg;log(`${d.name} hit ${ANIMAL_EMOJIS[a.type]} ${a.type} for ${dmg}!`,'combat');
+    if(a.hp<=0){a.dead=true;const food=t.food;if(food>0){const city=cityOf(d);if(city?.res)city.res.food+=food;d.hunger=Math.min(100,d.hunger+food*5);}log(`${d.name} killed a ${ANIMAL_EMOJIS[a.type]} ${a.type}!`,'combat');addEvent(d,'combat',`Killed a ${a.type}`);}}
+  }
+}
+function spawnAnimalsFB() {
+  if (G.animals.length >= 150) return;
+  const types = Object.keys(ANIMAL_TYPES_FB);
+  const toSpawn = Math.min(150 - G.animals.length, 3 + Math.floor(Math.random() * 5));
+  for (let i = 0; i < toSpawn; i++) {
+    const type = types[Math.floor(Math.random() * types.length)];
+    const t = ANIMAL_TYPES_FB[type];
+    for (let tries = 0; tries < 20; tries++) {
+      const rx = Math.floor(Math.random() * MAP_W), ry = 10 + Math.floor(Math.random() * (MAP_H - 20));
+      if (!t.terrain.includes(G.map[ry][rx]) || !isWalkable(rx, ry)) continue;
+      let nearCity = false;
+      for (const c of CITIES) { if (c.mx===undefined) continue; const cdx=Math.min(Math.abs(c.mx-rx),MAP_W-Math.abs(c.mx-rx)); if(cdx<=5&&Math.abs(c.my-ry)<=5){nearCity=true;break;} }
+      if (nearCity) continue;
+      G.animals.push(createAnimal(type, rx, ry));
+      break;
+    }
+  }
+}
+
 // Captain boards ship, sails to destination coastal city, disembarks
 function boardShip(d, ship, destCity) {
   if (!destCity || destCity.mx === undefined) return false;
@@ -2687,6 +2853,27 @@ function tickSeason() {
         }
       }
       if (deadIds.length) G.dwarves = G.dwarves.filter(dw => !deadIds.includes(dw.id));
+      // Generate per-city year resolutions
+      const resolutions = [];
+      for (const city of CITIES) {
+        if (!city.res || city.mx === undefined) continue;
+        const pop = G.dwarves.filter(d => d.cityId === city.id);
+        if (pop.length === 0) continue;
+        const avgAmb = pop.reduce((s,d) => s + (d.ambition||50), 0) / pop.length;
+        const avgFaith = pop.reduce((s,d) => s + (d.faith||50), 0) / pop.length;
+        const avgMoral = pop.reduce((s,d) => s + (d.morality||50), 0) / pop.length;
+        const r = city.res;
+        let resolution;
+        if (r.food < pop.length * 3) resolution = 'Focus on farming and food stores';
+        else if (avgAmb > 65) resolution = 'Expand territory and build aggressively';
+        else if (avgFaith > 65) resolution = 'Strengthen spiritual traditions';
+        else if (avgMoral > 65) resolution = 'Foster community bonds and sharing';
+        else if (r.iron > 20 || r.gold > 10) resolution = 'Invest in crafting and trade';
+        else if (pop.length >= 8) resolution = 'Send expeditions to new lands';
+        else resolution = 'Grow the population steadily';
+        resolutions.push({cityId:city.id, name:city.name, emoji:city.emoji, resolution});
+      }
+      if (resolutions.length) showYearBanner(G.year, resolutions);
     }
     const name = SEASONS[G.season];
     log(`🌍 ${name} of Year ${G.year}`, 'system');
@@ -2810,15 +2997,20 @@ function tickSeason() {
         }
       }
     }
+
+    // Spawn animals
+    spawnAnimalsFB();
   }
 }
 
 // ---- Event Log ----
 const logEntries = [];
 let logRarity = 1;
-const RARITY_LABELS = { 1: 'All', 2: 'Uncommon+', 3: 'Notable+', 4: 'Rare' };
-function log(msg, type, rarity) {
-  logEntries.push({ ts: `Y${G.year} ${SEASONS[G.season]}`, msg, type, rarity: rarity || 1 });
+const RARITY_LABELS = { 1: 'All', 2: 'Uncommon+', 3: 'Notable+', 4: 'Rare+', 5: 'Epic' };
+function log(msg, type, rarity, season, cityEmoji) {
+  const s = season !== undefined ? season : G.season;
+  const ts = SEASON_EMOJIS[s] + (cityEmoji ? ' ' + cityEmoji : '');
+  logEntries.push({ ts, msg, type, rarity: rarity || 1 });
   if (logEntries.length > 200) logEntries.shift();
   renderLog();
 }
@@ -3005,6 +3197,14 @@ function render() {
       if (d.sponsored) {
         try { ctx.drawImage(getEmojiImg('⭐'), px + TILE / 2, py - 2); } catch (e) {}
       }
+      // HP bar if damaged
+      if (d.hp != null && d.maxHp && d.hp < d.maxHp) {
+        const barW = 12, barH = 2;
+        const bx = px + (TILE - barW) / 2, by = py + TILE - 2;
+        ctx.fillStyle = '#3c3836'; ctx.fillRect(bx, by, barW, barH);
+        ctx.fillStyle = d.hp > d.maxHp * 0.5 ? '#b8bb26' : '#fb4934';
+        ctx.fillRect(bx, by, barW * (d.hp / d.maxHp), barH);
+      }
       // Pulsing ring for followed dwarf
       if (G.followDwarf === d.id) {
         const pulse = 0.5 + 0.5 * Math.sin(Date.now() / 300);
@@ -3025,6 +3225,31 @@ function render() {
       const py = ship.y * TILE - G.cam.y;
       if (px < -TILE || py < -TILE || px > w + TILE || py > h + TILE) continue;
       try { ctx.drawImage(getEmojiImg('⛵'), px, py); } catch (e) {}
+      break;
+    }
+  }
+
+  // Draw animals
+  for (const a of G.animals) {
+    for (const offset of [0, MAP_W, -MAP_W]) {
+      const px = (a.x + offset) * TILE - G.cam.x;
+      const py = a.y * TILE - G.cam.y;
+      if (px < -TILE || py < -TILE || px > w + TILE || py > h + TILE) continue;
+      const emoji = ANIMAL_EMOJIS[a.type] || '\uD83D\uDC3E';
+      try { ctx.drawImage(getEmojiImg(emoji), px, py); } catch (e) {}
+      // HP bar if damaged
+      if (a.hp < a.maxHp) {
+        const barW = 12, barH = 2;
+        const bx = px + (TILE - barW) / 2, by = py + TILE - 2;
+        ctx.fillStyle = '#3c3836'; ctx.fillRect(bx, by, barW, barH);
+        ctx.fillStyle = a.hp > a.maxHp * 0.5 ? '#b8bb26' : '#fb4934';
+        ctx.fillRect(bx, by, barW * (a.hp / a.maxHp), barH);
+      }
+      // Pet heart indicator
+      if (a.owner) {
+        ctx.fillStyle = '#fb4934'; ctx.font = '8px serif';
+        ctx.fillText('\u2764', px + TILE - 6, py + 6);
+      }
       break;
     }
   }
@@ -3069,10 +3294,46 @@ function renderMinimap() {
 }
 
 // ---- HUD ----
+let yearBannerTimer = null;
+function showYearBanner(year, resolutions) {
+  const el = document.getElementById('year-banner');
+  el.textContent = '';
+  const h = document.createElement('h3');
+  h.textContent = '\u{1F389} Year ' + year;
+  el.appendChild(h);
+  const top5 = resolutions.slice(0, 5);
+  for (const r of top5) {
+    const div = document.createElement('div');
+    div.className = 'res-line';
+    div.textContent = r.emoji + ' ' + r.name + ': ' + r.resolution;
+    el.appendChild(div);
+  }
+  el.classList.remove('hidden');
+  if (yearBannerTimer) clearTimeout(yearBannerTimer);
+  yearBannerTimer = setTimeout(() => el.classList.add('hidden'), 8000);
+}
+
+function getTemperature(lat, season) {
+  const base = Math.cos(Math.abs(lat) * Math.PI / 180);
+  const seasonAngle = season * Math.PI / 2;
+  const swing = Math.cos(seasonAngle - Math.PI / 2) * 0.25;
+  const hemiSign = lat >= 0 ? 1 : -1;
+  const latFactor = Math.min(1, Math.abs(lat) / 30);
+  return Math.max(0, Math.min(1, base + swing * hemiSign * latFactor));
+}
+
 function updateHUD() {
   document.getElementById('h-pop').textContent = G.dwarves.length;
   document.getElementById('h-year').textContent = G.year;
-  document.getElementById('sb-season').textContent = SEASONS[G.season];
+  document.getElementById('sb-season').textContent = SEASONS[G.season] + ', Year ' + G.year;
+
+  // Temperature-based UI tinting
+  const camLat = 90 - ((G.cam.y + canvas.height/2) / TILE / MAP_H) * 180;
+  const temp = getTemperature(camLat, G.season);
+  const hue = Math.round(30 + (1 - temp) * 180);
+  const sat = Math.round(10 + Math.abs(temp - 0.5) * 30);
+  document.documentElement.style.setProperty('--season-hue', hue);
+  document.documentElement.style.setProperty('--season-sat', sat + '%');
 
   // Show nearest city to camera center
   const camCX = Math.floor((G.cam.x + canvas.width / 2) / TILE);
@@ -3089,6 +3350,25 @@ function updateHUD() {
       span.textContent = icon + (r[key] ?? 0) + ' ';
       resEl.appendChild(span);
     }
+  }
+
+  // Inspector auto-refresh
+  if (inspCurrent) {
+    inspRefreshing = true;
+    if (inspCurrent.type === 'dwarf') {
+      const dw = G.dwarves.find(d => d.id === inspCurrent.id);
+      if (dw) showDwarfInspector(dw); else closeInspector();
+    } else if (inspCurrent.type === 'city') {
+      const city = CITIES.find(c => c.id === inspCurrent.id);
+      if (city) showCityInspector(city);
+    } else if (inspCurrent.type === 'animal') {
+      const a = G.animals.find(a => a.id === inspCurrent.id);
+      if (a) showAnimalInspector(a); else closeInspector();
+    } else if (inspCurrent.type === 'ship') {
+      const s = G.ships.find(s => s.id === inspCurrent.id);
+      if (s) showShipInspector(s); else closeInspector();
+    }
+    inspRefreshing = false;
   }
 }
 
@@ -3141,9 +3421,11 @@ function esc(s) { const el = document.createElement('div'); el.textContent = s; 
 function openInspector(tile) {
   const dwarves = G.dwarves.filter(dw => dw.x === tile.x && dw.y === tile.y);
   const ship = G.ships.find(s => s.x === tile.x && s.y === tile.y);
+  const animal = G.animals.find(a => a.x === tile.x && a.y === tile.y);
   const city = CITIES.find(c => c.mx === tile.x && c.my === tile.y);
   if (dwarves.length > 1) showDwarfList(dwarves);
   else if (dwarves.length === 1) showDwarfInspector(dwarves[0]);
+  else if (animal) showAnimalInspector(animal);
   else if (ship) showShipInspector(ship);
   else if (city) showCityInspector(city);
   else showTerrainInspector(tile);
@@ -3151,7 +3433,46 @@ function openInspector(tile) {
   else inspPanel.style.display = 'block';
 }
 
+function showAnimalInspector(animal) {
+  if (!inspRefreshing) inspCurrent = {type:'animal', id:animal.id};
+  const emoji = ANIMAL_EMOJIS[animal.type] || '\uD83D\uDC3E';
+  const danger = ANIMAL_DANGER[animal.type];
+  const pet = ANIMAL_PET[animal.type];
+  const owner = animal.owner ? G.dwarves.find(d => d.id === animal.owner) : null;
+
+  inspTitle.textContent = emoji + ' ' + (owner ? owner.name + "'s " : (danger ? 'Wild ' : '')) + animal.type.charAt(0).toUpperCase() + animal.type.slice(1);
+  const frag = document.createDocumentFragment();
+
+  const stLine = document.createElement('div');
+  stLine.style.cssText = 'font-size:10px;color:#a89984;margin:4px 0';
+  stLine.textContent = (danger ? '\u2620\uFE0F Dangerous' : pet ? '\uD83D\uDC96 Tameable' : '\uD83C\uDF3F Passive') + ' | State: ' + animal.state;
+  frag.appendChild(stLine);
+
+  // HP bar
+  const hpRow = document.createElement('div'); hpRow.className = 'irow';
+  const hl = document.createElement('span'); hl.textContent = '\u2764\uFE0F HP';
+  const hr = document.createElement('span'); hr.textContent = animal.hp + '/' + animal.maxHp;
+  hpRow.append(hl, hr); frag.appendChild(hpRow);
+  const hpBar = document.createElement('div'); hpBar.className = 'ibar';
+  const hpFill = document.createElement('div'); hpFill.className = 'ibar-fill';
+  hpFill.style.width = (animal.hp / animal.maxHp * 100) + '%';
+  hpFill.style.background = animal.hp > animal.maxHp * 0.5 ? '#b8bb26' : '#fb4934';
+  hpBar.appendChild(hpFill); frag.appendChild(hpBar);
+
+  if (owner) {
+    const ownerLine = document.createElement('div');
+    ownerLine.className = 'idwarf-link';
+    ownerLine.style.color = owner.color;
+    ownerLine.textContent = '\uD83D\uDC64 Owner: ' + owner.name;
+    ownerLine.onclick = () => showDwarfInspector(owner);
+    frag.appendChild(ownerLine);
+  }
+
+  inspBody.textContent = ''; inspBody.appendChild(frag);
+}
+
 function showShipInspector(ship) {
+  if (!inspRefreshing) inspCurrent = {type:'ship', id:ship.id};
   inspTitle.textContent = '⛵ ' + (ship.name || 'Ship ' + ship.id.slice(2));
   const frag = document.createDocumentFragment();
   const city = cityById(ship.cityId);
@@ -3195,7 +3516,11 @@ function showShipInspector(ship) {
 
   inspBody.textContent = ''; inspBody.appendChild(frag);
 }
+let inspCurrent = null;
+let inspRefreshing = false;
+
 function closeInspector() {
+  inspCurrent = null;
   if (isMobile) inspPanel.classList.remove('open');
   else inspPanel.style.display = 'none';
 }
@@ -3236,6 +3561,7 @@ function showDwarfList(dwarves) {
 }
 
 function showDwarfInspector(dw) {
+  if (!inspRefreshing) inspCurrent = {type:'dwarf', id:dw.id};
   const stateEmoji = dw.state === 'sleeping' ? '💤' : dw.state === 'mining' ? '⛏️' :
     dw.state === 'eating' ? '🍖' : dw.state === 'building' ? '🔨' : dw.state === 'farming' ? '🌱' :
     dw.state === 'hauling' ? '📦' : dw.state === 'gathering' ? '🧺' :
@@ -3270,6 +3596,19 @@ function showDwarfInspector(dw) {
     cityLine.style.cssText = 'font-size:10px;color:#665c54;margin:2px 0';
     cityLine.textContent = '🏘️ ' + city.name + (culture ? ' (' + culture.country + ')' : '');
     frag.appendChild(cityLine);
+  }
+
+  // HP bar
+  if (dw.maxHp) {
+    const hpRow = document.createElement('div'); hpRow.className = 'irow';
+    const hl = document.createElement('span'); hl.textContent = '\u2764\uFE0F HP';
+    const hr = document.createElement('span'); hr.textContent = (dw.hp ?? dw.maxHp) + '/' + dw.maxHp + (dw.poisonTicks ? ' \uD83E\uDDA0' : '');
+    hpRow.append(hl, hr); frag.appendChild(hpRow);
+    const hpBar = document.createElement('div'); hpBar.className = 'ibar';
+    const hpFill = document.createElement('div'); hpFill.className = 'ibar-fill';
+    hpFill.style.width = ((dw.hp ?? dw.maxHp) / dw.maxHp * 100) + '%';
+    hpFill.style.background = dw.hp > dw.maxHp * 0.5 ? '#b8bb26' : '#fb4934';
+    hpBar.appendChild(hpFill); frag.appendChild(hpBar);
   }
 
   for (const b of [
@@ -3384,6 +3723,7 @@ function showDwarfInspector(dw) {
 }
 
 function showCityInspector(city) {
+  if (!inspRefreshing) inspCurrent = {type:'city', id:city.id};
   const culture = CULTURES[city.culture];
   inspTitle.textContent = city.emoji + ' ' + city.name;
   const pop = G.dwarves.filter(dw => dw.cityId === city.id);
@@ -3776,15 +4116,23 @@ const SPEED_STEPS = [0, 1, 2, 5];
 const SPEED_LABELS = ['⏸', '1x', '2x', '5x'];
 const speedSlider = document.getElementById('speed-slider');
 const speedVal = document.getElementById('speed-val');
+const pauseBtn = document.getElementById('btn-pause');
 function updateSpeedUI() {
   const idx = G.paused ? 0 : SPEED_STEPS.indexOf(G.speed);
   speedSlider.value = idx >= 0 ? idx : 1;
   speedVal.textContent = G.paused ? '⏸' : G.speed + 'x';
+  pauseBtn.classList.toggle('active', G.paused);
 }
 speedSlider.addEventListener('input', () => {
   const idx = parseInt(speedSlider.value);
   if (idx === 0) { G.paused = true; }
   else { G.paused = false; G.speed = SPEED_STEPS[idx]; }
+  if (gameWorker) gameWorker.postMessage({ type: 'control', speed: G.speed, paused: G.paused });
+  updateSpeedUI();
+});
+pauseBtn.addEventListener('click', () => {
+  G.paused = !G.paused;
+  if (!G.paused && G.speed === 0) G.speed = 1;
   if (gameWorker) gameWorker.postMessage({ type: 'control', speed: G.speed, paused: G.paused });
   updateSpeedUI();
 });
@@ -4138,6 +4486,11 @@ function getSerializableState() {
       traits: d.traits, backstory: d.backstory, eventLog: d.eventLog?.slice(-50), age: d.age,
       carrying: d.carrying || 0, carryItems: d.carryItems || {},
       inventory: d.inventory || [],
+      hp: d.hp, maxHp: d.maxHp, ac: d.ac, poisonTicks: d.poisonTicks || 0, pet: d.pet || null,
+    })),
+    animals: G.animals.map(a => ({
+      id:a.id,type:a.type,x:a.x,y:a.y,hp:a.hp,maxHp:a.maxHp,ac:a.ac,
+      state:a.state,timer:a.timer,moveTimer:a.moveTimer,owner:a.owner,followTicks:a.followTicks||0,
     })),
     stats: G.stats,
     homeCity: G.homeCity ? { name: G.homeCity.name, mx: G.homeCity.mx, my: G.homeCity.my } : null,
@@ -4317,6 +4670,12 @@ async function restoreState() {
     log(`⛵ Restored ${G.ships.length} ships`, 'system');
   }
 
+  // Restore animals
+  if (saved.animals?.length) {
+    G.animals = saved.animals.map(a => ({...createAnimal(a.type, a.x, a.y), ...a, path:[], target:null}));
+  }
+  if (G.animals.length === 0) { for (let i = 0; i < 60; i++) spawnAnimalsFB(); }
+
   // Ensure minimum population: at least 2 dwarves per city
   for (const city of CITIES) {
     if (city.mx === undefined) continue;
@@ -4382,6 +4741,7 @@ function gameLoop(ts) {
         for (const d of G.dwarves) tickDwarf(d);
         G.dwarves = G.dwarves.filter(d => !d.dead);
         tickShips();
+        tickAnimals();
         tickSeason();
       } catch (e) { console.error('Tick error:', e); }
       if (G.tick % 30 === 0) updateHUD();
@@ -4417,6 +4777,7 @@ function initWorker() {
       case 'snapshot':
         G.dwarves = data.dwarves;
         G.ships = data.ships;
+        G.animals = data.animals || [];
         G.tick = data.tick;
         G.year = data.year;
         G.season = data.season;
@@ -4434,9 +4795,10 @@ function initWorker() {
           }
         }
         // Display buffered logs
-        for (const l of data.logs) log(l.msg, l.type, l.rarity);
+        for (const l of data.logs) log(l.msg, l.type, l.rarity, l.season, l.cityEmoji);
         // Show buffered toasts
         for (const t of data.toasts) {
+          if (t.type === 'year_resolutions') { showYearBanner(t.year, t.resolutions); continue; }
           if (typeof DAUB !== 'undefined' && DAUB.toast) DAUB.toast(t);
         }
         if (G.tick % 30 === 0) updateHUD();
@@ -4478,6 +4840,7 @@ function initWorker() {
       usedNames: undefined,
     })),
     ships: G.ships,
+    animals: G.animals,
     state: {
       tick: G.tick, year: G.year, season: G.season, speed: G.speed,
       paused: G.paused, stats: G.stats,
@@ -4515,6 +4878,7 @@ async function init() {
   await restoreState();
   loadSponsorships();
 
+  if (G.animals.length === 0) { for (let i = 0; i < 60; i++) spawnAnimalsFB(); }
   updateHUD();
   G.mapDirty = true;
   lastSaveTime = Date.now();

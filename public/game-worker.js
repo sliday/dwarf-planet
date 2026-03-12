@@ -46,6 +46,48 @@ const TERRAIN_CRAFT_ITEMS = {
   [T.DEER]:{emoji:'🌱',name:'Plant'},
 };
 
+// Animal types
+const ANIMAL_TYPES = {
+  cat:     {emoji:'\uD83D\uDC31',hp:4, ac:12,atk:0,dmg:0,       speed:0.3,food:1, danger:false,pet:true, terrain:[T.PLAINS,T.FOREST,T.ROAD]},
+  dog:     {emoji:'\uD83D\uDC36',hp:6, ac:11,atk:0,dmg:0,       speed:0.4,food:2, danger:false,pet:true, terrain:[T.PLAINS,T.FOREST,T.ROAD,T.DESERT]},
+  monkey:  {emoji:'\uD83D\uDC12',hp:5, ac:13,atk:3,dmg:'1d4',   speed:0.5,food:2, danger:true, pet:false,terrain:[T.JUNGLE]},
+  wolf:    {emoji:'\uD83D\uDC3A',hp:11,ac:13,atk:4,dmg:'2d4',   speed:0.6,food:3, danger:true, pet:false,terrain:[T.FOREST,T.TUNDRA]},
+  bear:    {emoji:'\uD83D\uDC3B',hp:19,ac:11,atk:5,dmg:'2d6',   speed:0.3,food:8, danger:true, pet:false,terrain:[T.FOREST,T.MOUNTAIN]},
+  snake:   {emoji:'\uD83D\uDC0D',hp:3, ac:14,atk:3,dmg:'1d4+poison',speed:0.2,food:1,danger:true,pet:false,terrain:[T.JUNGLE,T.DESERT]},
+  rabbit:  {emoji:'\uD83D\uDC07',hp:2, ac:14,atk:0,dmg:0,       speed:0.7,food:2, danger:false,pet:false,terrain:[T.PLAINS,T.FOREST]},
+  fox:     {emoji:'\uD83E\uDD8A',hp:6, ac:13,atk:3,dmg:'1d6',   speed:0.6,food:3, danger:true, pet:false,terrain:[T.PLAINS,T.FOREST]},
+  eagle:   {emoji:'\uD83E\uDD85',hp:5, ac:14,atk:4,dmg:'1d6',   speed:0.8,food:2, danger:true, pet:false,terrain:[T.MOUNTAIN]},
+  penguin: {emoji:'\uD83D\uDC27',hp:4, ac:10,atk:0,dmg:0,       speed:0.3,food:3, danger:false,pet:false,terrain:[T.TUNDRA]},
+  camel:   {emoji:'\uD83D\uDC2A',hp:15,ac:10,atk:0,dmg:0,       speed:0.4,food:6, danger:false,pet:false,terrain:[T.DESERT]},
+  gorilla: {emoji:'\uD83E\uDD8D',hp:20,ac:12,atk:6,dmg:'2d6',   speed:0.4,food:5, danger:true, pet:false,terrain:[T.JUNGLE]},
+  boar:    {emoji:'\uD83D\uDC17',hp:11,ac:12,atk:3,dmg:'1d6',   speed:0.5,food:4, danger:true, pet:false,terrain:[T.FOREST,T.PLAINS]},
+  scorpion:{emoji:'\uD83E\uDD82',hp:3, ac:15,atk:2,dmg:'1d4+poison',speed:0.2,food:0,danger:true,pet:false,terrain:[T.DESERT]},
+};
+const MAX_ANIMALS = 150;
+
+function rollD(n) { return 1 + Math.floor(Math.random() * n); }
+function rollDmg(str) {
+  if (!str || str === 0) return 0;
+  const s = String(str);
+  const poison = s.includes('+poison');
+  const base = s.replace('+poison','');
+  const m = base.match(/(\d+)d(\d+)/);
+  if (!m) return 0;
+  let total = 0;
+  for (let i = 0; i < parseInt(m[1]); i++) total += rollD(parseInt(m[2]));
+  return total;
+}
+
+function createAnimal(type, x, y) {
+  const t = ANIMAL_TYPES[type];
+  return {
+    id:'a_'+Math.random().toString(36).slice(2,8),
+    type, x, y, hp:t.hp, maxHp:t.hp, ac:t.ac,
+    state:'idle', target:null, path:[], timer:0, moveTimer:0,
+    owner:null, followTicks:0,
+  };
+}
+
 // Populated from init message
 let CITIES = [], CULTURES = {}, DWARF_NAMES = [], SURNAMES = [], SHIP_NAMES = {_default:['Wavecutter','Stormchaser','Sea Forge','Tidecaller','Iron Hull']};
 let AI_API_BASE = '';
@@ -55,13 +97,14 @@ const G = {
   map:[], tick:0, speed:1, paused:false,
   year:1, season:0,
   dwarves:[], usedNames:new Set(),
+  animals:[], animalGrid:{},
   ships:[], stats:{mined:0,built:0,farmed:0},
   homeCity:null, aiCityIndex:0, dwarfGrid:{},
 };
 
 // Message buffers
 const pendingLogs = [], pendingToasts = [], pendingMapChanges = [];
-function log(msg, type, rarity) { pendingLogs.push({msg,type,rarity:rarity||1}); }
+function log(msg, type, rarity, cityEmoji) { pendingLogs.push({msg,type,rarity:rarity||1,season:G.season,cityEmoji:cityEmoji||null}); }
 function mapSet(x, y, tile) { G.map[y][x] = tile; pendingMapChanges.push({x,y,tile}); }
 
 // Helpers
@@ -256,6 +299,8 @@ function createDwarf(x, y, cityId) {
     last = SURNAMES[Math.floor(Math.random()*SURNAMES.length)];
   }
   const culturalTrait = culture ? culture.traits[Math.floor(Math.random()*culture.traits.length)] : null;
+  const stats = {STR:roll3d6(),DEX:roll3d6(),CON:roll3d6(),INT:roll3d6(),WIS:roll3d6(),CHA:roll3d6()};
+  const maxHp = 8 + Math.floor(stats.CON / 3);
   return {
     id:'d_'+Math.random().toString(36).slice(2,8),
     name:first+' '+last, x, y, cityId:cityId||'',
@@ -263,7 +308,8 @@ function createDwarf(x, y, cityId) {
     happiness:70+Math.random()*20,
     state:'idle', target:null, path:[], timer:0,
     color:`hsl(${Math.floor(Math.random()*360)},55%,55%)`,
-    stats:{STR:roll3d6(),DEX:roll3d6(),CON:roll3d6(),INT:roll3d6(),WIS:roll3d6(),CHA:roll3d6()},
+    stats,
+    hp:maxHp, maxHp, ac:10+Math.floor((stats.DEX-10)/2), poisonTicks:0, combatTarget:null,
     faith:Math.floor(Math.random()*101),
     morality:Math.floor(Math.random()*101),
     ambition:Math.floor(Math.random()*101),
@@ -362,6 +408,12 @@ function tickDwarf(d) {
       }
     }
   }
+  // HP system
+  if (!d.maxHp) { d.maxHp = 8 + Math.floor((d.stats?.CON||10)/3); d.hp = d.hp ?? d.maxHp; d.ac = d.ac ?? 10+Math.floor(((d.stats?.DEX||10)-10)/2); }
+  if (d.hp <= 0) { d.state = 'dead'; d.dead = true; log(`${d.name} \u2620\uFE0F has died!`, 'system', 4); addEvent(d, 'death', 'Died in combat'); return; }
+  if (d.poisonTicks > 0) { d.hp -= 1; d.poisonTicks--; if (d.poisonTicks === 0) log(`${d.name} recovered from poison`, 'system', 2); }
+  if (d.hp < d.maxHp && d.hunger > 20 && d.energy > 30 && G.tick % 50 === 0) d.hp = Math.min(d.maxHp, d.hp + 1);
+
   d.hunger = Math.max(0, d.hunger - 0.03);
   d.energy = Math.max(0, d.energy - 0.02);
   d.happiness = Math.max(0, Math.min(100, d.happiness - 0.005));
@@ -464,9 +516,9 @@ function tryTrade(d) {
       const give = d.inventory.shift();
       const get1 = other.inventory.shift();
       const get2 = other.inventory.length > 0 ? other.inventory.shift() : null;
-      if (give) other.inventory.push(give);
-      if (get1) d.inventory.push(get1);
-      if (get2) d.inventory.push(get2);
+      if (give && other.inventory.length < MAX_INVENTORY) other.inventory.push(give);
+      if (get1 && d.inventory.length < MAX_INVENTORY) d.inventory.push(get1);
+      if (get2 && d.inventory.length < MAX_INVENTORY) d.inventory.push(get2);
       const gaveStr = give ? give.emoji+give.name : '?';
       const gotStr = [get1,get2].filter(Boolean).map(i => i.emoji+i.name).join(', ') || '?';
       log(`${d.name} \uD83E\uDD1D outsmarted ${other.name}: gave ${gaveStr}, got ${gotStr}`, 'trade', 2);
@@ -476,9 +528,9 @@ function tryTrade(d) {
       const give1 = d.inventory.shift();
       const give2 = d.inventory.length > 0 ? d.inventory.shift() : null;
       const get = other.inventory.shift();
-      if (give1) other.inventory.push(give1);
-      if (give2) other.inventory.push(give2);
-      if (get) d.inventory.push(get);
+      if (give1 && other.inventory.length < MAX_INVENTORY) other.inventory.push(give1);
+      if (give2 && other.inventory.length < MAX_INVENTORY) other.inventory.push(give2);
+      if (get && d.inventory.length < MAX_INVENTORY) d.inventory.push(get);
       const gaveStr = [give1,give2].filter(Boolean).map(i => i.emoji+i.name).join(', ') || '?';
       const gotStr = get ? get.emoji+get.name : '?';
       log(`${other.name} \uD83E\uDD1D outsmarted ${d.name}: ${d.name} gave ${gaveStr}, got ${gotStr}`, 'trade', 2);
@@ -487,8 +539,8 @@ function tryTrade(d) {
     } else {
       const give = d.inventory.shift();
       const get = other.inventory.shift();
-      if (give) other.inventory.push(give);
-      if (get) d.inventory.push(get);
+      if (give && other.inventory.length < MAX_INVENTORY) other.inventory.push(give);
+      if (get && d.inventory.length < MAX_INVENTORY) d.inventory.push(get);
       const gaveStr = give ? give.emoji+give.name : '?';
       const gotStr = get ? get.emoji+get.name : '?';
       log(`${d.name} \uD83E\uDD1D traded with ${other.name}: ${gaveStr} \u2194 ${gotStr}`, 'trade', 2);
@@ -704,7 +756,7 @@ function aiBuild(d) {
       d.happiness = Math.min(100, d.happiness + 2);
     } else if (d.target.type === 'upgrade_road' && G.map[y][x] === T.ROAD && res.iron >= 3 && res.wood >= 2) {
       res.iron -= 3; res.wood -= 2; mapSet(x, y, T.RAILROAD); G.stats.built++;
-      log(`${d.name} 🚂 upgraded road to railroad!`, 'build', 4);
+      log(`${d.name} 🚂 upgraded road to railroad!`, 'build', 3);
       addEvent(d, 'build', 'Upgraded road to railroad');
       d.happiness = Math.min(100, d.happiness + 5);
     }
@@ -885,7 +937,7 @@ function tryBuildShip(city) {
   r.wood -= SHIP_COST.wood; r.cloth -= SHIP_COST.cloth; r.iron -= SHIP_COST.iron;
   const ship = createShip(launchX, launchY, null, city.id);
   G.ships.push(ship);
-  log(`${city.name} ⛵ built a ship!`, 'city', 4);
+  log(`${city.name} ⛵ built a ship!`, 'city', 5);
   return ship;
 }
 
@@ -1001,7 +1053,7 @@ function tryFoundCity(d) {
   d.cityId = newId; partner.cityId = newId;
   d.state = 'idle'; d.target = null; d.path = [];
   partner.state = 'idle'; partner.target = null; partner.path = [];
-  log(`🏕️ ${d.name} and ${partner.name} founded ${newCity.name}!`, 'system', 4);
+  log(`🏕️ ${d.name} and ${partner.name} founded ${newCity.name}!`, 'system', 5);
   addEvent(d, 'found', `Founded ${newCity.name}`);
   addEvent(partner, 'found', `Founded ${newCity.name}`);
   return true;
@@ -1124,6 +1176,194 @@ function aiWander(d) {
   }
 }
 
+// ---- Animals ----
+function nearbyAnimals(x, y) {
+  const bx = x >> 3, by = y >> 3, result = [];
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+    const bucket = G.animalGrid?.[`${bx+dx},${by+dy}`];
+    if (bucket) for (const a of bucket) result.push(a);
+  }
+  return result;
+}
+
+function animalCombat(a, d) {
+  const t = ANIMAL_TYPES[a.type];
+  // Animal attacks dwarf
+  if (t.danger && t.atk > 0) {
+    const atkRoll = rollD(20) + t.atk;
+    if (atkRoll >= d.ac) {
+      let dmg = rollDmg(t.dmg);
+      if (dmg < 1) dmg = 1;
+      d.hp -= dmg;
+      if (String(t.dmg).includes('+poison')) d.poisonTicks = (d.poisonTicks||0) + 3;
+      log(`${t.emoji} ${a.type} hit ${d.name} for ${dmg} dmg!`, 'combat', 2);
+      if (d.hp <= 0) {
+        d.dead = true; d.state = 'dead';
+        log(`${d.name} \u2620\uFE0F was killed by a ${a.type}!`, 'system', 4);
+        addEvent(d, 'death', `Killed by a ${a.type}`);
+        return;
+      }
+    }
+  }
+  // Dwarf attacks animal
+  if (d.hp > 0) {
+    const strMod = Math.floor(((d.stats?.STR||10) - 10) / 2);
+    const atkRoll = rollD(20) + strMod;
+    if (atkRoll >= a.ac) {
+      let dmg = rollD(8) + strMod;
+      if (dmg < 1) dmg = 1;
+      a.hp -= dmg;
+      log(`${d.name} hit ${t.emoji} ${a.type} for ${dmg} dmg!`, 'combat', 2);
+      if (a.hp <= 0) {
+        a.dead = true;
+        const foodGain = t.food;
+        if (foodGain > 0) {
+          const city = cityOf(d);
+          if (city?.res) city.res.food += foodGain;
+          d.hunger = Math.min(100, d.hunger + foodGain * 5);
+        }
+        log(`${d.name} killed a ${t.emoji} ${a.type}!`, 'combat', 3);
+        addEvent(d, 'combat', `Killed a ${a.type}`);
+        d.happiness = Math.min(100, d.happiness + 2);
+      }
+    }
+  }
+}
+
+function tickAnimal(a) {
+  if (a.dead) return;
+  const t = ANIMAL_TYPES[a.type];
+  a.moveTimer = (a.moveTimer||0) + t.speed;
+  if (a.moveTimer < 1) return;
+  a.moveTimer -= 1;
+
+  // Pet following logic
+  if (a.owner) {
+    const owner = G.dwarves.find(d => d.id === a.owner);
+    if (!owner || owner.dead) { a.owner = null; a.state = 'idle'; return; }
+    const dx = owner.x - a.x, dy = owner.y - a.y;
+    const dist = Math.abs(dx) + Math.abs(dy);
+    if (dist > 2) {
+      // Move toward owner
+      const sx = dx > 0 ? 1 : dx < 0 ? -1 : 0;
+      const sy = dy > 0 ? 1 : dy < 0 ? -1 : 0;
+      const nx = wrapX(a.x + sx), ny = a.y + sy;
+      if (isWalkable(nx, ny)) { a.x = nx; a.y = ny; }
+    }
+    return;
+  }
+
+  // Check for nearby dwarves
+  const nearby = nearbyDwarves(a.x, a.y);
+  for (const d of nearby) {
+    const ddx = Math.abs(d.x - a.x), ddy = Math.abs(d.y - a.y);
+    if (ddx > 3 || ddy > 3) continue;
+
+    // Dangerous: aggro within 2 tiles
+    if (t.danger && ddx <= 2 && ddy <= 2) {
+      if (d.x === a.x && d.y === a.y) {
+        animalCombat(a, d);
+        return;
+      }
+      // Move toward dwarf
+      const sx = d.x > a.x ? 1 : d.x < a.x ? -1 : 0;
+      const sy = d.y > a.y ? 1 : d.y < a.y ? -1 : 0;
+      const nx = wrapX(a.x + sx), ny = a.y + sy;
+      if (isWalkable(nx, ny)) { a.x = nx; a.y = ny; }
+      return;
+    }
+
+    // Non-dangerous: flee within 3 tiles
+    if (!t.danger && ddx <= 3 && ddy <= 3) {
+      const sx = a.x > d.x ? 1 : a.x < d.x ? -1 : 0;
+      const sy = a.y > d.y ? 1 : a.y < d.y ? -1 : 0;
+      const nx = wrapX(a.x + (sx || (Math.random()<0.5?1:-1))), ny = a.y + (sy || (Math.random()<0.5?1:-1));
+      if (ny >= 0 && ny < MAP_H && isWalkable(nx, ny)) { a.x = nx; a.y = ny; }
+      return;
+    }
+  }
+
+  // Wander: stationary animals (scorpion, snake) rarely move
+  const stationary = a.type === 'scorpion' || a.type === 'snake';
+  if (stationary && Math.random() > 0.05) return;
+  if (Math.random() < 0.3) {
+    const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
+    const [ddx,ddy] = dirs[Math.floor(Math.random()*4)];
+    const nx = wrapX(a.x+ddx), ny = a.y+ddy;
+    if (ny >= 0 && ny < MAP_H && isWalkable(nx, ny)) { a.x = nx; a.y = ny; }
+  }
+}
+
+function tickAnimals() {
+  // Build animal grid
+  G.animalGrid = {};
+  for (const a of G.animals) {
+    const key = `${a.x>>3},${a.y>>3}`;
+    (G.animalGrid[key] ??= []).push(a);
+  }
+  // Stagger: 1/4 per tick
+  for (let i = 0; i < G.animals.length; i++) {
+    if (i % 4 !== G.tick % 4) continue;
+    tickAnimal(G.animals[i]);
+  }
+  G.animals = G.animals.filter(a => !a.dead);
+
+  // Dwarf-animal combat check: dwarves on same tile as dangerous animals
+  for (const d of G.dwarves) {
+    if (d.dead || d.state === 'sailing') continue;
+    const nearby = nearbyAnimals(d.x, d.y);
+    for (const a of nearby) {
+      if (a.dead || a.owner) continue;
+      const t = ANIMAL_TYPES[a.type];
+      if (!t.danger) continue;
+      if (a.x === d.x && a.y === d.y) {
+        animalCombat(a, d);
+        if (d.dead) break;
+      }
+    }
+    // Flee if low HP
+    if (d.hp > 0 && d.hp < d.maxHp * 0.3 && d.state !== 'fleeing') {
+      const hasNearbyDanger = nearby.some(a => !a.dead && ANIMAL_TYPES[a.type].danger && Math.abs(a.x-d.x)<=2 && Math.abs(a.y-d.y)<=2);
+      if (hasNearbyDanger) {
+        d.state = 'wander'; d.timer = 20; d.target = null; d.path = [];
+      }
+    }
+  }
+
+  // Pet adoption check
+  if (G.tick % 10 === 0) {
+    for (const a of G.animals) {
+      if (a.dead || a.owner) continue;
+      const t = ANIMAL_TYPES[a.type];
+      if (!t.pet) continue;
+      for (const d of nearbyDwarves(a.x, a.y)) {
+        if (d.dead || d.pet) continue;
+        const ddx = Math.abs(d.x - a.x), ddy = Math.abs(d.y - a.y);
+        if (ddx > 2 || ddy > 2) continue;
+        a.followTicks = (a.followTicks||0) + 1;
+        if (a.followTicks >= 3 && Math.random() < 0.2) {
+          a.owner = d.id;
+          d.pet = a.id;
+          d.happiness = Math.min(100, d.happiness + 5);
+          log(`${d.name} adopted a ${t.emoji} ${a.type}!`, 'system', 3);
+          addEvent(d, 'social', `Adopted a ${a.type}`);
+          break;
+        }
+      }
+    }
+  }
+
+  // Pet happiness bonus every 100 ticks
+  if (G.tick % 100 === 0) {
+    for (const d of G.dwarves) {
+      if (!d.pet) continue;
+      const pet = G.animals.find(a => a.id === d.pet);
+      if (pet && !pet.dead) d.happiness = Math.min(100, d.happiness + 2);
+      else d.pet = null;
+    }
+  }
+}
+
 // Seasons
 function tickSeason() {
   if (G.tick % 2000 === 0 && G.tick > 0) {
@@ -1140,6 +1380,27 @@ function tickSeason() {
         }
       }
       if (deadIds.length) G.dwarves = G.dwarves.filter(dw => !deadIds.includes(dw.id));
+      // Generate per-city year resolutions
+      const resolutions = [];
+      for (const city of CITIES) {
+        if (!city.res || city.mx === undefined) continue;
+        const pop = G.dwarves.filter(d => d.cityId === city.id);
+        if (pop.length === 0) continue;
+        const avgAmb = pop.reduce((s,d) => s + (d.ambition||50), 0) / pop.length;
+        const avgFaith = pop.reduce((s,d) => s + (d.faith||50), 0) / pop.length;
+        const avgMoral = pop.reduce((s,d) => s + (d.morality||50), 0) / pop.length;
+        const r = city.res;
+        let resolution;
+        if (r.food < pop.length * 3) resolution = 'Focus on farming and food stores';
+        else if (avgAmb > 65) resolution = 'Expand territory and build aggressively';
+        else if (avgFaith > 65) resolution = 'Strengthen spiritual traditions';
+        else if (avgMoral > 65) resolution = 'Foster community bonds and sharing';
+        else if (r.iron > 20 || r.gold > 10) resolution = 'Invest in crafting and trade';
+        else if (pop.length >= 8) resolution = 'Send expeditions to new lands';
+        else resolution = 'Grow the population steadily';
+        resolutions.push({cityId:city.id, name:city.name, emoji:city.emoji, resolution});
+      }
+      if (resolutions.length) pendingToasts.push({type:'year_resolutions', year:G.year, resolutions});
     }
     const name = SEASONS[G.season];
     log(`🌍 ${name} of Year ${G.year}`, 'system', 3);
@@ -1223,7 +1484,42 @@ function tickSeason() {
         if ((t===T.FOREST||t===T.PLAINS||t===T.TAIGA) && Math.random()<0.04) mapSet(rx,ry,T.DEER);
       }
     }
+
+    // Spawn animals
+    spawnAnimals();
   }
+}
+
+function spawnAnimals() {
+  if (G.animals.length >= MAX_ANIMALS) return;
+  const types = Object.keys(ANIMAL_TYPES);
+  const toSpawn = Math.min(MAX_ANIMALS - G.animals.length, 3 + Math.floor(Math.random() * 5));
+  for (let i = 0; i < toSpawn; i++) {
+    const type = types[Math.floor(Math.random() * types.length)];
+    const t = ANIMAL_TYPES[type];
+    for (let tries = 0; tries < 20; tries++) {
+      const rx = Math.floor(Math.random() * MAP_W);
+      const ry = 10 + Math.floor(Math.random() * (MAP_H - 20));
+      const tile = G.map[ry][rx];
+      if (!t.terrain.includes(tile)) continue;
+      if (!isWalkable(rx, ry)) continue;
+      // Don't spawn within 5 tiles of a city center
+      let nearCity = false;
+      for (const c of CITIES) {
+        if (c.mx === undefined) continue;
+        const cdx = Math.min(Math.abs(c.mx - rx), MAP_W - Math.abs(c.mx - rx));
+        if (cdx <= 5 && Math.abs(c.my - ry) <= 5) { nearCity = true; break; }
+      }
+      if (nearCity) continue;
+      G.animals.push(createAnimal(type, rx, ry));
+      break;
+    }
+  }
+}
+
+function seedAnimals() {
+  const count = 50 + Math.floor(Math.random() * 30);
+  for (let i = 0; i < count; i++) spawnAnimals();
 }
 
 // AI Client
@@ -1366,6 +1662,11 @@ function getSerializableState() {
       traits:d.traits,backstory:d.backstory,eventLog:d.eventLog?.slice(-50),age:d.age,
       carrying:d.carrying||0,carryItems:d.carryItems||{},
       inventory:d.inventory||[],
+      hp:d.hp,maxHp:d.maxHp,ac:d.ac,poisonTicks:d.poisonTicks||0,pet:d.pet||null,
+    })),
+    animals:G.animals.map(a => ({
+      id:a.id,type:a.type,x:a.x,y:a.y,hp:a.hp,maxHp:a.maxHp,ac:a.ac,
+      state:a.state,timer:a.timer,moveTimer:a.moveTimer,owner:a.owner,followTicks:a.followTicks||0,
     })),
     stats:G.stats,
     homeCity:G.homeCity?{name:G.homeCity.name,mx:G.homeCity.mx,my:G.homeCity.my}:null,
@@ -1409,6 +1710,8 @@ self.onmessage = function(e) {
         if (!d.inventory) d.inventory = [];
         d.state = d.state || 'idle';
       }
+      G.animals = (data.animals || []).map(a => ({...a, path:a.path||[], target:a.target||null}));
+      if (G.animals.length === 0) seedAnimals();
       startTickLoop();
       break;
     }
@@ -1445,6 +1748,8 @@ self.onmessage = function(e) {
             ambition:sd.ambition??d.ambition, traits:sd.traits||d.traits,
             backstory:sd.backstory||d.backstory, eventLog:sd.eventLog||[], age:sd.age??d.age,
             carrying:sd.carrying||0, carryItems:sd.carryItems||{}, inventory:sd.inventory||[],
+            hp:sd.hp??d.hp, maxHp:sd.maxHp??d.maxHp, ac:sd.ac??d.ac,
+            poisonTicks:sd.poisonTicks||0, pet:sd.pet||null,
           });
           d.target = null; d.path = [];
           if (!isWalkable(d.x, d.y)) {
@@ -1456,6 +1761,10 @@ self.onmessage = function(e) {
         });
       }
       if (saved.homeCity) G.homeCity = CITIES.find(c => c.name === saved.homeCity.name) || G.homeCity;
+      if (saved.animals?.length) {
+        G.animals = saved.animals.map(a => ({...createAnimal(a.type, a.x, a.y), ...a, path:[], target:null}));
+      }
+      if (G.animals.length === 0) seedAnimals();
       if (saved.ships?.length) {
         G.ships = saved.ships.map(s => ({
           ...createShip(s.x, s.y, s.captainId, s.cityId),
@@ -1491,6 +1800,7 @@ function startTickLoop() {
       for (const d of G.dwarves) tickDwarf(d);
       G.dwarves = G.dwarves.filter(d => !d.dead);
       tickShips();
+      tickAnimals();
       tickSeason();
     }
     aiTickAll();
@@ -1512,6 +1822,11 @@ function startTickLoop() {
         sponsored:d.sponsored,sponsorTier:d.sponsorTier,sponsorCallsRemaining:d.sponsorCallsRemaining,
         starveTicks:d.starveTicks||0,
         relationships:d.relationships,
+        hp:d.hp,maxHp:d.maxHp,ac:d.ac,poisonTicks:d.poisonTicks||0,pet:d.pet||null,
+      })),
+      animals:G.animals.map(a => ({
+        id:a.id,type:a.type,x:a.x,y:a.y,hp:a.hp,maxHp:a.maxHp,
+        state:a.state,owner:a.owner,
       })),
       ships:G.ships.map(s => ({
         id:s.id,x:s.x,y:s.y,captainId:s.captainId,cityId:s.cityId,
