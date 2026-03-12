@@ -925,9 +925,12 @@ const ANIMAL_EMOJIS = {
   cat:'\uD83D\uDC31',dog:'\uD83D\uDC36',monkey:'\uD83D\uDC12',wolf:'\uD83D\uDC3A',bear:'\uD83D\uDC3B',
   snake:'\uD83D\uDC0D',rabbit:'\uD83D\uDC07',fox:'\uD83E\uDD8A',eagle:'\uD83E\uDD85',penguin:'\uD83D\uDC27',
   camel:'\uD83D\uDC2A',gorilla:'\uD83E\uDD8D',boar:'\uD83D\uDC17',scorpion:'\uD83E\uDD82',
+  bee:'\uD83D\uDC1D',crocodile:'\uD83D\uDC0A',turtle:'\uD83D\uDC22',parrot:'\uD83E\uDD9C',
+  spider:'\uD83D\uDD77\uFE0F',deer:'\uD83E\uDD8C',owl:'\uD83E\uDD89',
+  shark:'\uD83E\uDD88',whale:'\uD83D\uDC0B',dolphin:'\uD83D\uDC2C',
 };
-const ANIMAL_DANGER = {monkey:1,wolf:1,bear:1,snake:1,fox:1,eagle:1,gorilla:1,boar:1,scorpion:1};
-const ANIMAL_PET = {cat:1,dog:1};
+const ANIMAL_DANGER = {monkey:1,wolf:1,bear:1,snake:1,fox:1,eagle:1,gorilla:1,boar:1,scorpion:1,bee:1,crocodile:1,spider:1,shark:1};
+const ANIMAL_PET = {cat:1,dog:1,parrot:1};
 
 const isMobile = 'ontouchstart' in window;
 if (isMobile) { document.body.classList.add('mobile'); G.zoom = 1.5; }
@@ -2583,7 +2586,7 @@ const ANIMAL_TYPES_FB = {
   snake:{hp:3,ac:14,atk:3,dmg:'1d4+poison',speed:0.2,food:1,danger:true,pet:false,terrain:[T.JUNGLE,T.DESERT]},
   rabbit:{hp:2,ac:14,atk:0,dmg:0,speed:0.7,food:2,danger:false,pet:false,terrain:[T.PLAINS,T.FOREST]},
   fox:{hp:6,ac:13,atk:3,dmg:'1d6',speed:0.6,food:3,danger:true,pet:false,terrain:[T.PLAINS,T.FOREST]},
-  eagle:{hp:5,ac:14,atk:4,dmg:'1d6',speed:0.8,food:2,danger:true,pet:false,terrain:[T.MOUNTAIN]},
+  eagle:{hp:5,ac:14,atk:4,dmg:'1d6',speed:0.8,food:2,danger:true,pet:false,terrain:[T.MOUNTAIN,T.HILL]},
   penguin:{hp:4,ac:10,atk:0,dmg:0,speed:0.3,food:3,danger:false,pet:false,terrain:[T.TUNDRA]},
   camel:{hp:15,ac:10,atk:0,dmg:0,speed:0.4,food:6,danger:false,pet:false,terrain:[T.DESERT]},
   gorilla:{hp:20,ac:12,atk:6,dmg:'2d6',speed:0.4,food:5,danger:true,pet:false,terrain:[T.JUNGLE]},
@@ -2596,7 +2599,9 @@ const ANIMAL_TYPES_FB = {
   spider:{hp:2,ac:15,atk:2,dmg:'1d4+poison',speed:0.3,food:0,danger:true,pet:false,terrain:[T.JUNGLE,T.TAIGA]},
   deer:{hp:8,ac:12,atk:0,dmg:0,speed:0.7,food:5,danger:false,pet:false,terrain:[T.FOREST,T.PLAINS,T.TAIGA]},
   owl:{hp:4,ac:14,atk:2,dmg:'1d4',speed:0.7,food:1,danger:false,pet:false,terrain:[T.FOREST,T.TAIGA]},
-  shark:{hp:22,ac:12,atk:6,dmg:'2d8',speed:0.8,food:0,danger:true,pet:false,terrain:[T.BEACH]},
+  shark:{hp:22,ac:12,atk:6,dmg:'2d8',speed:0.8,food:0,danger:true,pet:false,terrain:[T.OCEAN],water:true},
+  whale:{hp:40,ac:10,atk:0,dmg:0,speed:0.5,food:0,danger:false,pet:false,terrain:[T.OCEAN],water:true},
+  dolphin:{hp:12,ac:13,atk:0,dmg:0,speed:0.9,food:0,danger:false,pet:false,terrain:[T.OCEAN],water:true},
 };
 function rollD(n) { return 1 + Math.floor(Math.random() * n); }
 function rollDmg(str) {
@@ -2647,7 +2652,8 @@ function tickAnimals() {
       const dirs=[[0,-1],[1,0],[0,1],[-1,0]];
       const [ddx,ddy]=dirs[Math.floor(Math.random()*4)];
       const nx=wrapX(a.x+ddx),ny=a.y+ddy;
-      if(ny>=0&&ny<MAP_H&&isWalkable(nx,ny)){a.x=nx;a.y=ny;}
+      const canMove = ny>=0&&ny<MAP_H&&(t.water ? G.map[ny][nx]===T.OCEAN : isWalkable(nx,ny));
+      if(canMove){a.x=nx;a.y=ny;}
     }
   }
   G.animals = G.animals.filter(a => !a.dead);
@@ -2695,15 +2701,16 @@ function animalCombatFB(a, d) {
   }
 }
 function spawnAnimalsFB() {
-  if (G.animals.length >= 150) return;
+  if (G.animals.length >= 400) return;
   const types = Object.keys(ANIMAL_TYPES_FB);
-  const toSpawn = Math.min(150 - G.animals.length, 3 + Math.floor(Math.random() * 5));
+  const toSpawn = Math.min(400 - G.animals.length, 5 + Math.floor(Math.random() * 8));
   for (let i = 0; i < toSpawn; i++) {
     const type = types[Math.floor(Math.random() * types.length)];
     const t = ANIMAL_TYPES_FB[type];
-    for (let tries = 0; tries < 20; tries++) {
+    for (let tries = 0; tries < 30; tries++) {
       const rx = Math.floor(Math.random() * MAP_W), ry = 10 + Math.floor(Math.random() * (MAP_H - 20));
-      if (!t.terrain.includes(G.map[ry][rx]) || !isWalkable(rx, ry)) continue;
+      if (!t.terrain.includes(G.map[ry][rx])) continue;
+      if (!t.water && !isWalkable(rx, ry)) continue;
       let nearCity = false;
       for (const c of CITIES) { if (c.mx===undefined) continue; const cdx=Math.min(Math.abs(c.mx-rx),MAP_W-Math.abs(c.mx-rx)); if(cdx<=5&&Math.abs(c.my-ry)<=5){nearCity=true;break;} }
       if (nearCity) continue;
