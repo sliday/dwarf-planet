@@ -5285,9 +5285,18 @@ document.getElementById('hud-year-wrap').onclick = () => {
 };
 
 // Graveyard panel
+const RANDOM_CAUSES = ['Fell in battle','Killed by a wolf','Killed by a bear','Killed by a spider','Died of old age','Starved to death','Lost at sea','Caught in a rockslide','Succumbed to poison','Died defending the city','Perished in the wilderness','Felled by a serpent','Taken by illness','Collapsed from exhaustion'];
+function backfillGraveCause(g) {
+  if (!g.cause || g.cause === 'Unknown') {
+    g.cause = RANDOM_CAUSES[Math.abs(hashStr(g.name)) % RANDOM_CAUSES.length];
+    if (!g.age) g.age = 20 + Math.abs(hashStr(g.name + 'age')) % 50;
+  }
+}
+function hashStr(s) { let h = 0; for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0; return h; }
 function showGraveyardPanel() {
   const graves = G.graves || {};
   const entries = Object.entries(graves);
+  for (const [, g] of entries) backfillGraveCause(g);
   inspTitle.textContent = '⚰️ Graveyard (' + entries.length + ' fallen)';
   const frag = document.createDocumentFragment();
   for (const [key, g] of entries) {
@@ -5318,6 +5327,7 @@ function showGraveyardPanel() {
 
 // Grave inspector with AI epitaph
 function showGraveInspector(gx, gy, g) {
+  backfillGraveCause(g);
   inspTitle.textContent = g.emoji + ' ' + g.name;
   const frag = document.createDocumentFragment();
 
