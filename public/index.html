@@ -736,6 +736,15 @@ function getEmojiImg(emoji) {
   return c;
 }
 
+// Tile layer buffer (offscreen canvas for terrain)
+let tileBuffer = null;
+let tileBufferCtx = null;
+let tileBufferCamTX = -9999; // last rendered camera tile X
+let tileBufferCamTY = -9999;
+// Extra tiles to render beyond viewport for smooth scrolling
+const TILE_PAD = 2;
+let mmDirty = true; // separate dirty flag for minimap (throttled)
+
 // Minimap buffer
 let mmBuffer = null;
 let mmBufferCtx = null;
@@ -1006,6 +1015,43 @@ function generateMap() {
       }
     }
     if (!placed) continue;
+
+    // Coastal nudge: if ocean is within 8 tiles, move city to land edge (adjacent to ocean)
+    {
+      const cx = city.mx, cy = city.my;
+      let hasNearbyOcean = false;
+      for (let dy = -8; dy <= 8 && !hasNearbyOcean; dy++) {
+        for (let dx = -8; dx <= 8 && !hasNearbyOcean; dx++) {
+          const nx = wrapX(cx + dx), ny = cy + dy;
+          if (ny >= 0 && ny < MAP_H && G.map[ny][nx] === T.OCEAN) hasNearbyOcean = true;
+        }
+      }
+      if (hasNearbyOcean) {
+        // BFS from city position to find nearest land tile adjacent to ocean
+        let bestX = cx, bestY = cy, bestDist = Infinity;
+        for (let dy = -8; dy <= 8; dy++) {
+          for (let dx = -8; dx <= 8; dx++) {
+            const nx = wrapX(cx + dx), ny = cy + dy;
+            if (ny < 1 || ny >= MAP_H - 1) continue;
+            if (G.map[ny][nx] === T.OCEAN) continue;
+            // Check if adjacent to ocean
+            let adjOcean = false;
+            for (const [adx, ady] of [[0,-1],[1,0],[0,1],[-1,0]]) {
+              const ax = wrapX(nx + adx), ay = ny + ady;
+              if (ay >= 0 && ay < MAP_H && G.map[ay][ax] === T.OCEAN) { adjOcean = true; break; }
+            }
+            if (!adjOcean) continue;
+            // Must have enough land for fortress
+            if (countLandTiles(nx, ny) < 5) continue;
+            const dist = Math.abs(dx) + Math.abs(dy);
+            if (dist < bestDist) { bestDist = dist; bestX = nx; bestY = ny; }
+          }
+        }
+        if (bestDist < Infinity && bestDist <= 8) {
+          city.mx = bestX; city.my = bestY;
+        }
+      }
+    }
 
     // Initialize per-city resources
     city.res = biomeStartRes(city);
@@ -2523,37 +2569,59 @@ function resize() {
 }
 window.addEventListener('resize', resize);
 
-function render() {
-  const w = canvas.width, h = canvas.height;
-  ctx.fillStyle = '#042040';
-  ctx.fillRect(0, 0, w, h);
+let renderFrameCount = 0;
 
-  // Calculate visible tile range
-  const startGX = Math.floor(G.cam.x / TILE);
-  const startGY = Math.max(0, Math.floor(G.cam.y / TILE));
-  const endGX = startGX + Math.ceil(w / TILE) + 1;
-  const endGY = Math.min(MAP_H, Math.floor((G.cam.y + h) / TILE) + 1);
-
-  // Draw visible tiles
-  const emojiSize = TILE - 4;
+function renderTileBuffer(startGX, startGY, endGX, endGY) {
+  const bw = (endGX - startGX + 1) * TILE;
+  const bh = (endGY - startGY) * TILE;
+  if (!tileBuffer || tileBuffer.width !== bw || tileBuffer.height !== bh) {
+    tileBuffer = document.createElement('canvas');
+    tileBuffer.width = bw; tileBuffer.height = bh;
+    tileBufferCtx = tileBuffer.getContext('2d');
+  }
+  tileBufferCtx.fillStyle = '#042040';
+  tileBufferCtx.fillRect(0, 0, bw, bh);
   for (let gy = startGY; gy < endGY; gy++) {
     for (let gx = startGX; gx <= endGX; gx++) {
       const mx = wrapX(gx);
       const t = G.map[gy][mx];
-      const px = gx * TILE - G.cam.x;
-      const py = gy * TILE - G.cam.y;
-
-      // Background color
-      ctx.fillStyle = BG_COLORS[t] || '#042040';
-      ctx.fillRect(px, py, TILE, TILE);
-
-      // Emoji overlay (cached)
+      const px = (gx - startGX) * TILE;
+      const py = (gy - startGY) * TILE;
+      tileBufferCtx.fillStyle = BG_COLORS[t] || '#042040';
+      tileBufferCtx.fillRect(px, py, TILE, TILE);
       const em = EMOJI[t];
       if (em && t !== T.OCEAN) {
-        try { ctx.drawImage(getEmojiImg(em), px, py); } catch (e) {}
+        try { tileBufferCtx.drawImage(getEmojiImg(em), px, py); } catch (e) {}
       }
     }
   }
+  tileBufferCamTX = startGX;
+  tileBufferCamTY = startGY;
+}
+
+function render() {
+  renderFrameCount++;
+  const w = canvas.width, h = canvas.height;
+  ctx.fillStyle = '#042040';
+  ctx.fillRect(0, 0, w, h);
+
+  // Calculate visible tile range with padding for smooth scroll
+  const startGX = Math.floor(G.cam.x / TILE) - TILE_PAD;
+  const startGY = Math.max(0, Math.floor(G.cam.y / TILE) - TILE_PAD);
+  const endGX = startGX + Math.ceil(w / TILE) + 1 + TILE_PAD * 2;
+  const endGY = Math.min(MAP_H, Math.floor((G.cam.y + h) / TILE) + 1 + TILE_PAD);
+
+  // Re-render tile buffer only when camera moves to new tile or map changes
+  if (startGX !== tileBufferCamTX || startGY !== tileBufferCamTY || G.mapDirty) {
+    renderTileBuffer(startGX, startGY, endGX, endGY);
+    if (G.mapDirty) mmDirty = true;
+    G.mapDirty = false;
+  }
+
+  // Blit tile buffer to screen (single drawImage instead of thousands)
+  const offsetX = startGX * TILE - G.cam.x;
+  const offsetY = startGY * TILE - G.cam.y;
+  ctx.drawImage(tileBuffer, offsetX, offsetY);
 
   // Selection highlight
   if (G.sel) {
@@ -2592,9 +2660,6 @@ function render() {
   }
 
   // Draw dwarves
-  ctx.font = `${TILE - 4}px serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
   for (const d of G.dwarves) {
     // Check both regular and wrapped positions
     for (const offset of [0, MAP_W, -MAP_W]) {
@@ -2608,17 +2673,15 @@ function render() {
       ctx.lineWidth = 1;
       ctx.strokeRect(px + 3, py + 3, TILE - 6, TILE - 6);
 
-      // Dwarf emoji
+      // Dwarf emoji (use cached canvas images for performance)
       const dEmoji = d.state === 'sleeping' ? '💤' : d.state === 'mining' ? '⛏️' :
                      d.state === 'eating' || d.state === 'going_eat' ? '🍖' :
                      d.state === 'building' ? '🔨' : d.state === 'farming' ? '🌱' :
                      d.state === 'hauling' ? '📦' : d.state === 'gathering' ? '🧺' :
                      d.state === 'sailing' ? '⛵' : '🧔';
-      ctx.fillText(dEmoji, px + TILE / 2, py + TILE / 2 + 1);
+      try { ctx.drawImage(getEmojiImg(dEmoji), px, py); } catch (e) {}
       if (d.sponsored) {
-        ctx.font = '8px sans-serif';
-        ctx.fillText('\u2B50', px + TILE - 4, py + 6);
-        ctx.font = TILE * 0.7 + 'px sans-serif';
+        try { ctx.drawImage(getEmojiImg('⭐'), px + TILE / 2, py - 2); } catch (e) {}
       }
       // Pulsing ring for followed dwarf
       if (G.followDwarf === d.id) {
@@ -2639,7 +2702,7 @@ function render() {
       const px = (ship.x + offset) * TILE - G.cam.x;
       const py = ship.y * TILE - G.cam.y;
       if (px < -TILE || py < -TILE || px > w + TILE || py > h + TILE) continue;
-      ctx.fillText('⛵', px + TILE / 2, py + TILE / 2 + 1);
+      try { ctx.drawImage(getEmojiImg('⛵'), px, py); } catch (e) {}
       break;
     }
   }
@@ -2651,12 +2714,12 @@ function render() {
     ctx.strokeRect(G.hovTile.gx * TILE - G.cam.x, G.hovTile.y * TILE - G.cam.y, TILE, TILE);
   }
 
-  // Minimap
-  renderMinimap();
+  // Minimap (throttle to every 3rd frame)
+  if (renderFrameCount % 3 === 0) renderMinimap();
 }
 
 function renderMinimap() {
-  if (G.mapDirty) renderMmBuffer();
+  if (mmDirty) { renderMmBuffer(); mmDirty = false; }
   mmCtx.drawImage(mmBuffer, 0, 0);
 
   // Viewport rect
