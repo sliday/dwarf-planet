@@ -464,6 +464,9 @@ const TERRAIN_PROPS = {
 
 const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
 
+const RES_NAMES = { food:'Food', wood:'Wood', stone:'Stone', iron:'Iron', gold:'Gold', cloth:'Cloth', ale:'Ale', herbs:'Herbs', beds:'Beds', tables:'Tables' };
+const RES_ICONS = [['🍖','food'],['🪵','wood'],['🪨','stone'],['⚔️','iron'],['🪙','gold'],['🧵','cloth'],['🍺','ale'],['🌿','herbs'],['🛏️','beds'],['🪑','tables']];
+
 const EMOJI = {
   [T.OCEAN]: '🌊', [T.TUNDRA]: '❄️', [T.TAIGA]: '🌲', [T.FOREST]: '🌳',
   [T.PLAINS]: '🌿', [T.DESERT]: '🏜️', [T.JUNGLE]: '🌴', [T.MOUNTAIN]: '🏔️',
@@ -2999,8 +3002,14 @@ function updateHUD() {
   if (nc && nc.res) {
     document.getElementById('h-city').textContent = nc.emoji + ' ' + nc.name;
     const r = nc.res;
-    document.getElementById('h-res').textContent =
-      `🍖${r.food} 🪵${r.wood} 🪨${r.stone} ⚔️${r.iron} 🪙${r.gold} 🍺${r.ale}`;
+    const resEl = document.getElementById('h-res');
+    resEl.textContent = '';
+    for (const [icon, key] of RES_ICONS) {
+      const span = document.createElement('span');
+      span.title = RES_NAMES[key];
+      span.textContent = icon + (r[key] ?? 0) + ' ';
+      resEl.appendChild(span);
+    }
   }
 }
 
@@ -3344,9 +3353,9 @@ function showCityInspector(city) {
   }
 
   const resDiv = document.createElement('div'); resDiv.className = 'ires';
-  for (const [icon, val] of [['🍖',r.food],['🪵',r.wood],['🪨',r.stone],['⚔️',r.iron],['🪙',r.gold],['🧵',r.cloth],['🍺',r.ale],['🌿',r.herbs],['🛏️',r.beds],['🪑',r.tables]]) {
-    const span = document.createElement('span'); span.className = 'ires-item'; span.textContent = icon + ' ';
-    const rv = document.createElement('span'); rv.className = 'rv'; rv.textContent = val ?? 0;
+  for (const [icon, key] of RES_ICONS) {
+    const span = document.createElement('span'); span.className = 'ires-item'; span.title = RES_NAMES[key]; span.textContent = icon + ' ';
+    const rv = document.createElement('span'); rv.className = 'rv'; rv.textContent = r[key] ?? 0;
     span.appendChild(rv); resDiv.appendChild(span);
   }
   frag.appendChild(resDiv);
