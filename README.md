@@ -58,6 +58,7 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 ### Ships & Sea Travel
 - Ships built at coastal cities (10 wood + 3 cloth + 2 iron)
 - **Ship beaching**: docked ships move onto adjacent land tiles so dwarves can walk to them; ships launch back to water when sailing begins
+- **Ocean wildlife**: sharks, whales, and dolphins swim in the ocean (up to 400 animals total)
 - 1 captain per ship — sails across ocean to other coastal cities
 - Captain sleeps and eats aboard; ship auto-fishes from fish spots
 - Cargo system: resources transfer to destination city on arrival
@@ -76,6 +77,7 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - Event log with season emoji timestamps (🌱☀️🍂❄️) and rarity filter with consecutive entry collapsing (×N); all events with locations are clickable (pans camera)
 - **Temperature tinting**: HUD and status bar shift warm amber → cool blue based on camera latitude and season
 - **Year resolutions banner**: each new year shows per-city goals (farming, expansion, crafting) based on population stats
+- **Graveyard panel**: click fallen count in Year panel to browse all graves; each grave shows cause of death, age, home city, and an AI-generated epitaph (gemini-3.1-flash-lite)
 - Footer shows full season + year (e.g. "Autumn, Year 16")
 - Clickable minimap: click/tap to jump camera to any location on desktop and mobile
 - Splash screen for new visitors + in-game mechanics guide
@@ -118,14 +120,14 @@ Pay to upgrade a dwarf's AI reasoning tier via Polar.sh. Sponsored dwarves get a
 - **AI:** OpenRouter via Vercel AI SDK v6 + Zod v4 schemas
 - **Payments:** Polar.sh (@polar-sh/sdk)
 - **Frontend:** Vanilla JS canvas + DAUB UI (grunge theme)
-- **Tests:** Vitest (315 tests across 19 files)
+- **Tests:** Vitest (316 tests across 19 files)
 
 ## Development
 
 ```bash
 npm install
 npm run dev              # local dev server
-npm test                 # run 315 tests
+npm test                 # run 316 tests
 npm run test:watch       # vitest watch mode
 npm run db:migrate:local # apply D1 migrations locally
 npm run db:migrate:remote # apply D1 migrations to production
@@ -179,5 +181,5 @@ src/guardrails/        # Budget + rate limiting
 src/db/state.ts        # D1 state persistence
 migrations/            # D1 SQL migrations
 scripts/               # Import/seed scripts
-tests/                 # 19 test files, 315 tests
+tests/                 # 19 test files, 316 tests
 ```

@@ -75,7 +75,7 @@ const ANIMAL_TYPES = {
   snake:   {emoji:'\uD83D\uDC0D',hp:3, ac:14,atk:3,dmg:'1d4+poison',speed:0.2,food:1,danger:true,pet:false,terrain:[T.JUNGLE,T.DESERT]},
   rabbit:  {emoji:'\uD83D\uDC07',hp:2, ac:14,atk:0,dmg:0,       speed:0.7,food:2, danger:false,pet:false,terrain:[T.PLAINS,T.FOREST]},
   fox:     {emoji:'\uD83E\uDD8A',hp:6, ac:13,atk:3,dmg:'1d6',   speed:0.6,food:3, danger:true, pet:false,terrain:[T.PLAINS,T.FOREST]},
-  eagle:   {emoji:'\uD83E\uDD85',hp:5, ac:14,atk:4,dmg:'1d6',   speed:0.8,food:2, danger:true, pet:false,terrain:[T.MOUNTAIN]},
+  eagle:   {emoji:'\uD83E\uDD85',hp:5, ac:14,atk:4,dmg:'1d6',   speed:0.8,food:2, danger:true, pet:false,terrain:[T.MOUNTAIN,T.HILL]},
   penguin: {emoji:'\uD83D\uDC27',hp:4, ac:10,atk:0,dmg:0,       speed:0.3,food:3, danger:false,pet:false,terrain:[T.TUNDRA]},
   camel:   {emoji:'\uD83D\uDC2A',hp:15,ac:10,atk:0,dmg:0,       speed:0.4,food:6, danger:false,pet:false,terrain:[T.DESERT]},
   gorilla: {emoji:'\uD83E\uDD8D',hp:20,ac:12,atk:6,dmg:'2d6',   speed:0.4,food:5, danger:true, pet:false,terrain:[T.JUNGLE]},
@@ -88,9 +88,11 @@ const ANIMAL_TYPES = {
   spider:  {emoji:'\uD83D\uDD77\uFE0F',hp:2, ac:15,atk:2,dmg:'1d4+poison',speed:0.3,food:0,danger:true,pet:false,terrain:[T.JUNGLE,T.TAIGA]},
   deer:    {emoji:'\uD83E\uDD8C',hp:8, ac:12,atk:0,dmg:0,       speed:0.7,food:5, danger:false,pet:false,terrain:[T.FOREST,T.PLAINS,T.TAIGA]},
   owl:     {emoji:'\uD83E\uDD89',hp:4, ac:14,atk:2,dmg:'1d4',   speed:0.7,food:1, danger:false,pet:false,terrain:[T.FOREST,T.TAIGA]},
-  shark:   {emoji:'\uD83E\uDD88',hp:22,ac:12,atk:6,dmg:'2d8',   speed:0.8,food:0, danger:true,pet:false,terrain:[T.BEACH]},
+  shark:   {emoji:'\uD83E\uDD88',hp:22,ac:12,atk:6,dmg:'2d8',   speed:0.8,food:0, danger:true,pet:false,terrain:[T.OCEAN],water:true},
+  whale:   {emoji:'\uD83D\uDC0B',hp:40,ac:10,atk:0,dmg:0,       speed:0.5,food:0, danger:false,pet:false,terrain:[T.OCEAN],water:true},
+  dolphin: {emoji:'\uD83D\uDC2C',hp:12,ac:13,atk:0,dmg:0,       speed:0.9,food:0, danger:false,pet:false,terrain:[T.OCEAN],water:true},
 };
-const MAX_ANIMALS = 150;
+const MAX_ANIMALS = 400;
 
 function rollD(n) { return 1 + Math.floor(Math.random() * n); }
 function rollDmg(str) {
@@ -1655,7 +1657,8 @@ function tickAnimal(a) {
     const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
     const [ddx,ddy] = dirs[Math.floor(Math.random()*4)];
     const nx = wrapX(a.x+ddx), ny = a.y+ddy;
-    if (ny >= 0 && ny < MAP_H && isWalkable(nx, ny)) { a.x = nx; a.y = ny; }
+    const canMove = ny >= 0 && ny < MAP_H && (t.water ? G.map[ny][nx] === T.OCEAN : isWalkable(nx, ny));
+    if (canMove) { a.x = nx; a.y = ny; }
   }
 }
 
@@ -1950,17 +1953,16 @@ function tickSeason() {
 function spawnAnimals() {
   if (G.animals.length >= MAX_ANIMALS) return;
   const types = Object.keys(ANIMAL_TYPES);
-  const toSpawn = Math.min(MAX_ANIMALS - G.animals.length, 3 + Math.floor(Math.random() * 5));
+  const toSpawn = Math.min(MAX_ANIMALS - G.animals.length, 5 + Math.floor(Math.random() * 8));
   for (let i = 0; i < toSpawn; i++) {
     const type = types[Math.floor(Math.random() * types.length)];
     const t = ANIMAL_TYPES[type];
-    for (let tries = 0; tries < 20; tries++) {
+    for (let tries = 0; tries < 30; tries++) {
       const rx = Math.floor(Math.random() * MAP_W);
       const ry = 10 + Math.floor(Math.random() * (MAP_H - 20));
       const tile = G.map[ry][rx];
       if (!t.terrain.includes(tile)) continue;
-      if (!isWalkable(rx, ry)) continue;
-      // Don't spawn within 5 tiles of a city center
+      if (!t.water && !isWalkable(rx, ry)) continue;
       let nearCity = false;
       for (const c of CITIES) {
         if (c.mx === undefined) continue;
@@ -1975,7 +1977,7 @@ function spawnAnimals() {
 }
 
 function seedAnimals() {
-  const count = 50 + Math.floor(Math.random() * 30);
+  const count = 80 + Math.floor(Math.random() * 40);
   for (let i = 0; i < count; i++) spawnAnimals();
 }
 
