@@ -1160,28 +1160,40 @@ function generateMap() {
     G.map.push(row);
   }
 
-  // Stage 1.5: Biome border scatter — bleed terrain at biome edges for natural transitions
+  // Stage 1.5: Biome border scatter — multi-pass bleed for wide, organic transitions
   const SCATTER_BIOMES = new Set([T.FOREST, T.TAIGA, T.TUNDRA, T.PLAINS, T.DESERT, T.JUNGLE, T.MOUNTAIN, T.HILL, T.BEACH]);
-  for (let y = 1; y < MAP_H - 1; y++) {
-    for (let x = 0; x < MAP_W; x++) {
-      const t = G.map[y][x];
-      if (!SCATTER_BIOMES.has(t)) continue;
-      // Check if this is a border tile (any neighbor has different biome)
-      const neighbors = [
-        G.map[y-1][wrapX(x)], G.map[y+1][wrapX(x)],
-        G.map[y][wrapX(x-1)], G.map[y][wrapX(x+1)]
-      ];
-      for (const nt of neighbors) {
-        if (nt !== t && SCATTER_BIOMES.has(nt) && nt !== T.OCEAN) {
-          // 12% chance to scatter this tile's type into neighbor area
-          // Use noise for deterministic, organic-looking bleed
-          const sn = noise(x * 0.3 + 777, y * 0.3 + 777);
-          if (sn > 0.25 && Math.random() < 0.12) {
-            G.map[y][x] = nt;
+  const scatterPasses = [0.12, 0.08, 0.05];
+  for (let pass = 0; pass < scatterPasses.length; pass++) {
+    const chance = scatterPasses[pass];
+    for (let y = 1; y < MAP_H - 1; y++) {
+      for (let x = 0; x < MAP_W; x++) {
+        const t = G.map[y][x];
+        if (!SCATTER_BIOMES.has(t)) continue;
+        const neighbors = [
+          G.map[y-1][wrapX(x)], G.map[y+1][wrapX(x)],
+          G.map[y][wrapX(x-1)], G.map[y][wrapX(x+1)],
+          G.map[y-1][wrapX(x-1)], G.map[y-1][wrapX(x+1)],
+          G.map[y+1][wrapX(x-1)], G.map[y+1][wrapX(x+1)]
+        ];
+        for (const nt of neighbors) {
+          if (nt !== t && SCATTER_BIOMES.has(nt) && nt !== T.OCEAN) {
+            const sn = noise(x * 0.3 + 777 + pass * 111, y * 0.3 + 777 + pass * 111);
+            if (sn > 0.25 && Math.random() < chance) {
+              G.map[y][x] = nt;
+            }
+            break;
           }
-          break;
         }
       }
+    }
+  }
+
+  // Stage 1.6: Forest islands in plains — noise-based clusters for visual variety
+  for (let y = 5; y < MAP_H - 5; y++) {
+    for (let x = 0; x < MAP_W; x++) {
+      if (G.map[y][x] !== T.PLAINS) continue;
+      const fn = noise(x * 0.15 + 300, y * 0.15 + 300);
+      if (fn > 0.55) G.map[y][x] = T.FOREST;
     }
   }
 
@@ -1677,6 +1689,7 @@ function createDwarf(x, y, cityId) {
     carrying: 0, // resource units being carried (max based on STR)
     carryItems: {}, // { stone: 2, iron: 1, ... } breakdown of carried resources
     inventory: [], // craft items [{emoji, name}], max 6
+    sex: Math.random() < 0.5 ? 'M' : 'F',
   };
 }
 
@@ -1775,8 +1788,9 @@ function tickDwarf(d) {
   if (d.poisonTicks > 0) { d.hp -= 1; d.poisonTicks--; }
   if (d.hp < d.maxHp && d.hunger > 20 && d.energy > 30 && G.tick % 50 === 0) d.hp = Math.min(d.maxHp, d.hp + 1);
 
-  d.hunger = Math.max(0, d.hunger - 0.03);
-  d.energy = Math.max(0, d.energy - 0.02);
+  const isChild = (d.age || 20) < 20;
+  d.hunger = Math.max(0, d.hunger - (isChild ? 0.015 : 0.03));
+  d.energy = Math.max(0, d.energy - (isChild ? 0.01 : 0.02));
   d.happiness = Math.max(0, Math.min(100, d.happiness - 0.005));
 
   if (d.hunger <= 0) {
@@ -1987,6 +2001,7 @@ function tryTradeCaravan(d) {
 function aiIdle(d) {
   if (d._tickSlot === undefined) d._tickSlot = G.dwarves.indexOf(d) % 4;
   if (G.tick % 4 !== d._tickSlot) return;
+  if ((d.age || 20) < 20) { d.state = 'wander'; d.timer = 15 + Math.floor(Math.random() * 20); return; }
   if (executeIntent(d)) return;
   if (d.carryItems?.food > 0) {
     const starving = G.dwarves.find(o => o.cityId === d.cityId && o.state === 'starving' && o.id !== d.id);
@@ -3025,7 +3040,26 @@ function tickSeason() {
     }
     const name = SEASONS[G.season];
     log(`🌍 ${name} of Year ${G.year}`, 'system');
-    if (typeof DAUB !== 'undefined') DAUB.toast({ type: 'info', title: name + ', Year ' + G.year, message: 'The seasons turn across Dwarf Land...' });
+
+    // Reproduction: one birth per city per season
+    for (const city of CITIES) {
+      if (!city.res || city.mx === undefined) continue;
+      const cityDwarves = G.dwarves.filter(d => d.cityId === city.id);
+      const cityPop = cityDwarves.length;
+      if (cityPop >= 10 || G.dwarves.length >= 300) continue;
+      if (city.res.food < cityPop * 3) continue;
+      const males = cityDwarves.filter(d => d.sex === 'M' && d.happiness >= 70 && d.age >= 20 && d.age < 55);
+      const females = cityDwarves.filter(d => d.sex === 'F' && d.happiness >= 70 && d.age >= 20 && d.age < 55);
+      if (males.length > 0 && females.length > 0 && Math.random() < 0.4) {
+        const baby = createDwarf(city.mx, city.my, city.id);
+        baby.age = 0;
+        baby.sex = Math.random() < 0.5 ? 'M' : 'F';
+        const land = findNearbyLand(city.mx, city.my);
+        if (land) { baby.x = land[0]; baby.y = land[1]; }
+        G.dwarves.push(baby);
+        log(`👶 ${baby.name} was born in ${city.name}!`, 'system');
+      }
+    }
 
     if (G.season === 0 || G.season === 1) {
       // Per-city harvest based on nearby farms and resource tiles
@@ -3973,7 +4007,9 @@ function showDwarfInspector(dw) {
     dw.state === 'sailing' ? '⛵' : dw.state === 'driving' ? '🚗' : dw.state === 'wander' ? '🚶' : '🧔';
   const city = cityOf(dw);
   const culture = CULTURES[city?.culture];
-  inspTitle.textContent = dw.name + (dw.sponsored ? ' ⭐' : '');
+  const sexEmoji = dw.sex === 'F' ? '♀' : '♂';
+  const ageCategory = (dw.age || 20) < 20 ? 'Child' : (dw.age || 20) >= 60 ? 'Elder' : 'Adult';
+  inspTitle.textContent = sexEmoji + ' ' + dw.name + (dw.sponsored ? ' ⭐' : '');
   const s = dw.stats || {};
   const mod = v => { const m = Math.floor((v - 10) / 2); return m >= 0 ? '+' + m : '' + m; };
   const frag = document.createDocumentFragment();
@@ -3994,6 +4030,11 @@ function showDwarfInspector(dw) {
   };
   stateRow.appendChild(followBtn);
   frag.appendChild(stateRow);
+
+  const ageLine = document.createElement('div');
+  ageLine.style.cssText = 'font-size:10px;color:#a89984;margin:2px 0';
+  ageLine.textContent = ageCategory + ', age ' + (dw.age || 20);
+  frag.appendChild(ageLine);
 
   if (city) {
     const cityLine = document.createElement('div');
@@ -4936,6 +4977,7 @@ function getSerializableState() {
       carrying: d.carrying || 0, carryItems: d.carryItems || {},
       inventory: d.inventory || [],
       hp: d.hp, maxHp: d.maxHp, ac: d.ac, poisonTicks: d.poisonTicks || 0, pet: d.pet || null,
+      sex: d.sex || 'M',
     })),
     animals: G.animals.map(a => ({
       id:a.id,type:a.type,x:a.x,y:a.y,hp:a.hp,maxHp:a.maxHp,ac:a.ac,
@@ -5095,6 +5137,7 @@ async function restoreState() {
         backstory: sd.backstory || d.backstory, eventLog: sd.eventLog || [], age: sd.age ?? d.age,
         carrying: sd.carrying || 0, carryItems: sd.carryItems || {},
         inventory: sd.inventory || [],
+        sex: sd.sex || d.sex,
       });
       d.target = null; d.path = [];
       if (!isWalkable(d.x, d.y)) {

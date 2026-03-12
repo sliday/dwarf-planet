@@ -354,6 +354,7 @@ function createDwarf(x, y, cityId) {
     backstory:'', eventLog:[],
     age:20+Math.floor(Math.random()*30),
     carrying:0, carryItems:{}, inventory:[],
+    sex: Math.random() < 0.5 ? 'M' : 'F',
   };
 }
 function findNearbyLand(cx, cy) {
@@ -477,8 +478,10 @@ function tickDwarf(d) {
     return;
   }
 
-  d.hunger = Math.max(0, d.hunger - 0.03);
-  d.energy = Math.max(0, d.energy - 0.02);
+  // Children (age 0-19): reduced needs drain, wander near city, no work
+  const isChild = (d.age || 20) < 20;
+  d.hunger = Math.max(0, d.hunger - (isChild ? 0.015 : 0.03));
+  d.energy = Math.max(0, d.energy - (isChild ? 0.01 : 0.02));
   d.happiness = Math.max(0, Math.min(100, d.happiness - 0.005));
   if (d.hunger <= 0) {
     d.starveTicks = (d.starveTicks || 0) + 1;
@@ -732,6 +735,7 @@ function tryTradeCaravan(d) {
 function aiIdle(d) {
   if (d._tickSlot === undefined) d._tickSlot = G.dwarves.indexOf(d) % 4;
   if (G.tick % 4 !== d._tickSlot) return;
+  if ((d.age || 20) < 20) { d.state = 'wander'; d.timer = 15 + Math.floor(Math.random() * 20); return; }
   if (executeIntent(d)) return;
   if (d.carryItems?.food > 0) {
     const starving = G.dwarves.find(o => o.cityId === d.cityId && o.state === 'starving' && o.id !== d.id);
@@ -1782,6 +1786,26 @@ function tickSeason() {
     const name = SEASONS[G.season];
     log(`🌍 ${name} of Year ${G.year}`, 'system', 3);
 
+    // Reproduction: one birth per city per season
+    for (const city of CITIES) {
+      if (!city.res || city.mx === undefined) continue;
+      const cityDwarves = G.dwarves.filter(d => d.cityId === city.id);
+      const cityPop = cityDwarves.length;
+      if (cityPop >= 10 || G.dwarves.length >= 300) continue;
+      if (city.res.food < cityPop * 3) continue;
+      const males = cityDwarves.filter(d => d.sex === 'M' && d.happiness >= 70 && d.age >= 20 && d.age < 55);
+      const females = cityDwarves.filter(d => d.sex === 'F' && d.happiness >= 70 && d.age >= 20 && d.age < 55);
+      if (males.length > 0 && females.length > 0 && Math.random() < 0.4) {
+        const baby = createDwarf(city.mx, city.my, city.id);
+        baby.age = 0;
+        baby.sex = Math.random() < 0.5 ? 'M' : 'F';
+        const land = findNearbyLand(city.mx, city.my);
+        if (land) { baby.x = land[0]; baby.y = land[1]; }
+        G.dwarves.push(baby);
+        log(`👶 ${baby.name} was born in ${city.name}!`, 'system', 3, null, baby.x, baby.y);
+      }
+    }
+
     if (G.season === 0 || G.season === 1) {
       for (const city of CITIES) {
         if (!city.res || city.mx === undefined) continue;
@@ -2094,6 +2118,7 @@ function getSerializableState() {
       carrying:d.carrying||0,carryItems:d.carryItems||{},
       inventory:d.inventory||[],
       hp:d.hp,maxHp:d.maxHp,ac:d.ac,poisonTicks:d.poisonTicks||0,pet:d.pet||null,
+      sex:d.sex||'M',
     })),
     animals:G.animals.map(a => ({
       id:a.id,type:a.type,x:a.x,y:a.y,hp:a.hp,maxHp:a.maxHp,ac:a.ac,
@@ -2190,6 +2215,7 @@ self.onmessage = function(e) {
             carrying:sd.carrying||0, carryItems:sd.carryItems||{}, inventory:sd.inventory||[],
             hp:sd.hp??d.hp, maxHp:sd.maxHp??d.maxHp, ac:sd.ac??d.ac,
             poisonTicks:sd.poisonTicks||0, pet:sd.pet||null,
+            sex:sd.sex||d.sex,
           });
           d.target = null; d.path = [];
           if (!isWalkable(d.x, d.y)) {
@@ -2282,7 +2308,7 @@ function startTickLoop() {
         sponsored:d.sponsored,sponsorTier:d.sponsorTier,sponsorCallsRemaining:d.sponsorCallsRemaining,
         starveTicks:d.starveTicks||0,
         relationships:d.relationships,
-        hp:d.hp,maxHp:d.maxHp,ac:d.ac,poisonTicks:d.poisonTicks||0,pet:d.pet||null,
+        hp:d.hp,maxHp:d.maxHp,ac:d.ac,poisonTicks:d.poisonTicks||0,pet:d.pet||null,sex:d.sex||'M',
       })),
       animals:G.animals.map(a => ({
         id:a.id,type:a.type,x:a.x,y:a.y,hp:a.hp,maxHp:a.maxHp,
