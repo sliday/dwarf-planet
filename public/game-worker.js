@@ -47,7 +47,7 @@ const TERRAIN_CRAFT_ITEMS = {
 };
 
 // Populated from init message
-let CITIES = [], CULTURES = {}, DWARF_NAMES = [], SURNAMES = [];
+let CITIES = [], CULTURES = {}, DWARF_NAMES = [], SURNAMES = [], SHIP_NAMES = {_default:['Wavecutter','Stormchaser','Sea Forge','Tidecaller','Iron Hull']};
 let AI_API_BASE = '';
 
 // Worker state
@@ -842,8 +842,14 @@ function aiCraft(d) {
 }
 
 // Ships
+function shipNameForCity(cityId) {
+  const city = cityById(cityId);
+  const culture = city ? city.culture : null;
+  const names = SHIP_NAMES[culture] || SHIP_NAMES._default;
+  return names[Math.floor(Math.random() * names.length)];
+}
 function createShip(x, y, captainId, cityId) {
-  return { id:'s_'+Math.random().toString(36).slice(2,8), x, y, captainId, cityId, cargo:{}, cargoTotal:0, state:'docked', target:null, path:[] };
+  return { id:'s_'+Math.random().toString(36).slice(2,8), name:shipNameForCity(cityId), x, y, captainId, cityId, cargo:{}, cargoTotal:0, state:'docked', target:null, path:[] };
 }
 function shipCargo(ship) { return Object.values(ship.cargo).reduce((s,v) => s+v, 0); }
 function tickShip(ship) {
@@ -1380,6 +1386,7 @@ self.onmessage = function(e) {
       for (let y = 0; y < MAP_H; y++) G.map.push(flat.slice(y * MAP_W, (y+1) * MAP_W));
       CITIES = data.cities;
       CULTURES = data.cultures;
+      SHIP_NAMES = data.shipNames || SHIP_NAMES;
       DWARF_NAMES = data.dwarfNames;
       SURNAMES = data.surnames;
       AI_API_BASE = data.apiBase || '';
@@ -1452,7 +1459,7 @@ self.onmessage = function(e) {
       if (saved.ships?.length) {
         G.ships = saved.ships.map(s => ({
           ...createShip(s.x, s.y, s.captainId, s.cityId),
-          id:s.id, cargo:s.cargo||{}, state:s.state||'docked',
+          id:s.id, name:s.name||shipNameForCity(s.cityId), cargo:s.cargo||{}, state:s.state||'docked',
           cargoTotal:Object.values(s.cargo||{}).reduce((a,b)=>a+b,0),
           path:[], target:null,
         }));

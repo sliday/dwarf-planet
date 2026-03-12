@@ -467,6 +467,36 @@ const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
 const RES_NAMES = { food:'Food', wood:'Wood', stone:'Stone', iron:'Iron', gold:'Gold', cloth:'Cloth', ale:'Ale', herbs:'Herbs', beds:'Beds', tables:'Tables' };
 const RES_ICONS = [['🍖','food'],['🪵','wood'],['🪨','stone'],['⚔️','iron'],['🪙','gold'],['🧵','cloth'],['🍺','ale'],['🌿','herbs'],['🛏️','beds'],['🪑','tables']];
 
+const SHIP_NAMES = {
+  american:['Liberty','Frontier','Pioneer','Eagle','Destiny'], british:['Endeavour','Sovereign','Tempest','Valiant','Drake'],
+  french:['Lumiere','Triomphe','Mistral','Etoile','Vendee'], japanese:['Yamato','Kaze','Sakura Maru','Tsunami','Asahi'],
+  egyptian:['Nile Star','Pharaoh','Sphinx','Cleopatra','Anubis'], australian:['Boomerang','Coral Wind','Kookaburra','Outback','Reef Runner'],
+  brazilian:['Esperanca','Carnival','Amazonia','Samba','Ipanema'], chinese:['Dragon Pearl','Jade Wind','Phoenix','Lotus','Great Wall'],
+  indian:['Ganges Star','Monsoon','Lotus Bloom','Dharma','Sindhu'], kenyan:['Simba','Safari Wind','Kilimanjaro','Uhuru','Savanna'],
+  mexican:['Azteca','Sol de Oro','Quetzal','Mariposa','Oaxaca'], argentinian:['Pampero','Tango','Patagonia','Gaucho','La Plata'],
+  turkish:['Bosphorus','Crescent','Anatolia','Sultan Wind','Cappadocia'], nigerian:['Sahara Wind','Lagos Star','Baobab','Harmattan','Calabar'],
+  emirati:['Desert Pearl','Falcon','Oasis','Palm Wind','Burj'], singaporean:['Merlion','Marina','Orchid','Straits Runner','Temasek'],
+  korean:['Halla','Arirang','Tiger Wave','Hangang','Mugunghwa'], thai:['Chao Phraya','Lotus Wind','Siam Star','Monsoon Pearl','Orchid'],
+  peruvian:['Condor','Inca Star','Nazca','Machu Picchu','Andina'], italian:['Gondola','Vesuvio','Stella del Mare','Tramontana','Adriatica'],
+  german:['Nordwind','Loreley','Sturm','Rhein Gold','Elbe'], icelandic:['Frost Wind','Geyser','Saga','Ragnarok','Aurora'],
+  south_african:['Table Wind','Karoo','Madiba','Springbok','Drakensberg'], hawaiian:['Aloha Star','Moana','Hoku','Maui Wind','Kai'],
+  alaskan:['Glacier','Kodiak Bear','Denali Star','Tundra Wind','Borealis'], polish:['Orzeł','Wawel','Vistula Star','Hussar','Gdansk Wind'],
+  spanish:['Armada','Flamenco','Iberia','Zephyr','Estrella'], portuguese:['Descoberta','Lusitania','Algarve','Vasco','Fado'],
+  dutch:['Windmill','Tulip','Oranje','Polder Star','Zeeland'], austrian:['Danube Pearl','Alpenwind','Vienna Star','Mozart','Edelweiss'],
+  greek:['Odyssey','Poseidon','Aegean Star','Trireme','Olympus'], swedish:['Viking Star','Nordlicht','Uppsala','Valhalla','Birka'],
+  norwegian:['Fjord Wind','Norseman','Tromsø','Midgard','Freya'], finnish:['Sisu','Sauna Wind','Suomi Star','Lapland','Karelia'],
+  czech:['Moldau','Bohemia','Golem','Prague Star','Pilsner'], ukrainian:['Cossack','Dnipro Star','Tryzub','Sunflower','Kyiv Wind'],
+  iranian:['Persian Star','Shiraz','Zagros','Isfahan','Cyrus'], vietnamese:['Mekong Star','Lotus Sail','Phoenix','Bamboo Wind','Halong'],
+  filipino:['Bayanihan','Pearl of Orient','Magellan','Sampaguita','Manila Star'], indonesian:['Nusantara','Garuda','Krakatoa','Spice Wind','Bali Star'],
+  ethiopian:['Blue Nile','Habesha','Rift Valley','Lalibela','Axum'], colombian:['El Dorado','Cumbia','Andina','Cartagena Star','Emerald'],
+  chilean:['Patagonia Wind','Atacama','Mapuche','Santiago Star','Andes'], canadian:['Voyageur','Northern Light','Maple','Huron','Chinook'],
+  kiwi:['Aotearoa','Silver Fern','Kiwi Wind','Tangaroa','Waka'], moroccan:['Sahara Star','Marrakech','Atlas Wind','Berber','Casablanca'],
+  irish:['Shamrock','Celtic Wind','Claddagh','Erin','Galway Star'], cuban:['Havana Star','Revolucion','Caribe','Mojito','Guantanamo'],
+  saudi:['Desert Falcon','Riyadh Star','Hajj Wind','Oasis Pearl','Bedouin'], iraqi:['Mesopotamia','Tigris Star','Babylon','Ur Wind','Basra'],
+  syrian:['Damascus Star','Palmyra','Silk Wind','Aleppo','Euphrates'], jordanian:['Petra','Dead Sea Pearl','Amman Star','Bedouin Wind','Jerash'],
+  lebanese:['Cedar','Phoenicia','Beirut Star','Byblos','Tyre'], _default:['Wavecutter','Stormchaser','Sea Forge','Tidecaller','Iron Hull']
+};
+
 const EMOJI = {
   [T.OCEAN]: '🌊', [T.TUNDRA]: '❄️', [T.TAIGA]: '🌲', [T.FOREST]: '🌳',
   [T.PLAINS]: '🌿', [T.DESERT]: '🏜️', [T.JUNGLE]: '🌴', [T.MOUNTAIN]: '🏔️',
@@ -2219,14 +2249,21 @@ function aiCraft(d) {
 const SHIP_COST = { wood: 10, cloth: 3, iron: 2 };
 const SHIP_CARGO_MAX = 20;
 
+function shipNameForCity(cityId) {
+  const city = cityById(cityId);
+  const culture = city ? city.culture : null;
+  const names = SHIP_NAMES[culture] || SHIP_NAMES._default;
+  return names[Math.floor(Math.random() * names.length)];
+}
 function createShip(x, y, captainId, cityId) {
   return {
     id: 's_' + Math.random().toString(36).slice(2, 8),
+    name: shipNameForCity(cityId),
     x, y, captainId, cityId,
-    cargo: {}, // resource storage { food: 5, wood: 3, ... }
+    cargo: {},
     cargoTotal: 0,
-    state: 'docked', // docked, sailing, waiting
-    target: null, // { x, y } destination
+    state: 'docked',
+    target: null,
     path: [],
   };
 }
@@ -3073,7 +3110,7 @@ function openInspector(tile) {
 }
 
 function showShipInspector(ship) {
-  inspTitle.textContent = '⛵ Ship ' + ship.id.slice(2);
+  inspTitle.textContent = '⛵ ' + (ship.name || 'Ship ' + ship.id.slice(2));
   const frag = document.createDocumentFragment();
   const city = cityById(ship.cityId);
   const captain = G.dwarves.find(d => d.id === ship.captainId);
@@ -4218,7 +4255,7 @@ async function restoreState() {
   if (saved.ships?.length) {
     G.ships = saved.ships.map(s => ({
       ...createShip(s.x, s.y, s.captainId, s.cityId),
-      id: s.id, cargo: s.cargo || {}, state: s.state || 'docked',
+      id: s.id, name: s.name || shipNameForCity(s.cityId), cargo: s.cargo || {}, state: s.state || 'docked',
       cargoTotal: Object.values(s.cargo || {}).reduce((a, b) => a + b, 0),
       path: [], target: null,
     }));
@@ -4377,6 +4414,7 @@ function initWorker() {
     map: flat.buffer,
     cities: CITIES.map(c => ({ ...c, discoveries: undefined })),
     cultures: CULTURES,
+    shipNames: SHIP_NAMES,
     dwarfNames: DWARF_NAMES,
     surnames: SURNAMES,
     apiBase: AI.apiBase,
