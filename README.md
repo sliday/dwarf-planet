@@ -54,7 +54,10 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - Follow/lock camera on a specific dwarf with pulsing ring indicator
 - City switcher dropdown in top HUD — click city name to jump to any of 125 cities
 - City ideology labels computed from aggregate personality (Militant, Spiritual, Mercantile, etc.)
-- Contextual Mine/Build/Farm/Road actions in dwarf inspector
+- Contextual Mine/Build/Farm/Road designation buttons with drag-to-designate
+- Speed slider (⏸ → 1x → 2x → 5x) for simulation speed control
+- Event log rarity filter (All → Uncommon+ → Notable+ → Rare only) with consecutive entry collapsing (×N)
+- Clickable minimap: click/tap to jump camera to any location on desktop and mobile
 - Splash screen for new visitors + in-game mechanics guide
 - Full mobile support: touch pan, pinch-to-zoom (0.75x–3.0x), tap-to-inspect
 - Responsive layout: bottom sheet inspector, collapsible event log, thumb-zone toolbar
@@ -142,7 +145,8 @@ npm run db:migrate:remote                 # apply to production
 ## Architecture
 
 ```
-public/index.html      # Game client (canvas, all game logic)
+public/index.html      # Game client (canvas, UI, rendering)
+public/game-worker.js  # Web Worker simulation (tick loop, AI, pathfinding)
 src/worker.ts          # Hono API server
 src/ai/router.ts       # Model routing + fallback chains
 src/ai/schemas.ts      # Zod v4 schemas for AI output

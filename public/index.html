@@ -82,6 +82,8 @@
     text-transform: uppercase; color: #a89984; border-bottom: 1px solid #3c3836;
   }
   .log-header button { background: none; border: none; color: #a89984; cursor: pointer; font-size: 14px; }
+  .log-rarity-wrap { display: flex; align-items: center; gap: 4px; }
+  .log-count { font-size: 9px; color: #665c54; margin-left: 2px; }
   .log-body {
     overflow-y: auto; padding: 4px 12px; font-size: 12px; font-weight: 600;
     scrollbar-width: thin; scrollbar-color: #504945 transparent;
@@ -107,14 +109,20 @@
     display: flex; flex-direction: column; gap: 10px;
   }
   .controls .section-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #a89984; }
-  .speed-row { display: flex; gap: 4px; }
-  .speed-btn {
-    padding: 4px 14px; font-size: 13px; border: 1px solid #504945; background: #3c3836;
-    color: #ebdbb2; cursor: pointer; border-radius: 4px; font-family: inherit;
+  .speed-slider-row { display: flex; align-items: center; gap: 6px; }
+  .speed-label { font-size: 12px; color: #a89984; min-width: 20px; text-align: center; }
+  .ctrl-slider {
+    -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
+    background: #504945; border-radius: 2px; outline: none;
   }
-  .speed-btn.active { background: #98971a; color: #1d2021; border-color: #98971a; }
-  .speed-btn:hover { background: #504945; }
-  .speed-btn.active:hover { background: #79740e; }
+  .ctrl-slider::-webkit-slider-thumb {
+    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
+    background: #98971a; cursor: pointer; border: 1px solid #79740e;
+  }
+  .ctrl-slider::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: #98971a; cursor: pointer; border: 1px solid #79740e;
+  }
   .action-row { display: flex; gap: 4px; }
   .action-btn {
     padding: 6px 16px; font-size: 13px; border: 1px solid #504945; background: #3c3836;
@@ -197,7 +205,8 @@
     background: rgba(29,32,33,0.97);
   }
   .mobile .controls .section-label { display: none; }
-  .mobile .speed-btn, .mobile .action-btn {
+  .mobile .speed-slider-row { flex: 1 1 100%; margin-bottom: 4px; }
+  .mobile .action-btn {
     min-width: 44px; min-height: 44px; font-size: 18px; padding: 8px;
     display: flex; align-items: center; justify-content: center;
   }
@@ -270,23 +279,29 @@
 
 <canvas class="minimap" id="minimap" width="250" height="125"></canvas>
 <div class="event-log">
-  <div class="log-header"><span>Event Log</span><button id="btn-clear-log" title="Clear">&#x1f5d1;</button></div>
+  <div class="log-header">
+    <span>Event Log</span>
+    <span class="log-rarity-wrap">
+      <input type="range" id="log-rarity" min="1" max="4" value="1" class="ctrl-slider" style="width:60px" title="Filter: Common → Rare">
+      <span id="log-rarity-label" style="font-size:9px;min-width:30px">All</span>
+    </span>
+    <button id="btn-clear-log" title="Clear">&#x1f5d1;</button>
+  </div>
   <div class="log-body" id="log-body"></div>
 </div>
 
 <div class="controls">
-  <div class="section-label">Controls</div>
-  <div class="speed-row">
-    <button class="speed-btn active" data-speed="1">1x</button>
-    <button class="speed-btn" data-speed="2">2x</button>
-    <button class="speed-btn" data-speed="5">5x</button>
-    <button class="speed-btn" data-speed="0" id="btn-pause">&#x23f8;</button>
+  <div class="speed-slider-row">
+    <span class="speed-label">&#x23f8;</span>
+    <input type="range" id="speed-slider" min="0" max="3" value="1" class="ctrl-slider">
+    <span class="speed-label" id="speed-val">1x</span>
   </div>
+  <div class="section-label">Designate</div>
   <div class="action-row">
-    <button class="action-btn" id="btn-mine" title="Designate tiles for mining (mountains, hills)">&#x26cf; Mine</button>
-    <button class="action-btn" id="btn-room" title="Designate tiles for building walls">&#x1f9f1; Build</button>
-    <button class="action-btn" id="btn-farm" title="Designate tiles for farming">&#x1f33e; Farm</button>
-    <button class="action-btn" id="btn-road" title="Designate tiles for road construction (1 stone/tile)">&#x1f6e4;&#xfe0f; Road</button>
+    <button class="action-btn" id="btn-mine" title="Drag on map to mark mountains/hills for mining">&#x26cf; Mine</button>
+    <button class="action-btn" id="btn-room" title="Drag on map to mark areas for wall construction">&#x1f9f1; Build</button>
+    <button class="action-btn" id="btn-farm" title="Drag on map to mark areas for farm plots">&#x1f33e; Farm</button>
+    <button class="action-btn" id="btn-road" title="Drag on map to mark areas for road construction">&#x1f6e4;&#xfe0f; Road</button>
     <button class="action-btn" id="btn-search" title="Search for a dwarf by name">&#x1f50d;</button>
     <button class="action-btn" id="btn-about" onclick="DAUB.openModal('about-modal')">?</button>
   </div>
@@ -513,7 +528,7 @@ const EMOJI = {
 };
 
 const BG_COLORS = {
-  [T.OCEAN]: '#064273', [T.TUNDRA]: '#c8d6e5', [T.TAIGA]: '#2d5016',
+  [T.OCEAN]: '#305e8f', [T.TUNDRA]: '#c8d6e5', [T.TAIGA]: '#2d5016',
   [T.FOREST]: '#1a4a1a', [T.PLAINS]: '#4a6c2f', [T.DESERT]: '#c2a645',
   [T.JUNGLE]: '#0d3b0d', [T.MOUNTAIN]: '#6b6b6b', [T.HILL]: '#7a7a5a',
   [T.BEACH]: '#d4b96a', [T.FLOOR]: '#3a2a1a', [T.WALL]: '#8a7a6a',
@@ -927,7 +942,7 @@ function createMmBuffer() {
 function renderMmBuffer() {
   const mw = mmBuffer.width, mh = mmBuffer.height;
   const sx = mw / MAP_W, sy = mh / MAP_H;
-  mmBufferCtx.fillStyle = '#064273';
+  mmBufferCtx.fillStyle = '#305e8f';
   mmBufferCtx.fillRect(0, 0, mw, mh);
   for (let y = 0; y < MAP_H; y++) {
     for (let x = 0; x < MAP_W; x++) {
@@ -2800,11 +2815,21 @@ function tickSeason() {
 
 // ---- Event Log ----
 const logEntries = [];
-function log(msg, type) {
-  logEntries.push({ ts: `Y${G.year} ${SEASONS[G.season]}`, msg, type });
+let logRarity = 1;
+const RARITY_LABELS = { 1: 'All', 2: 'Uncommon+', 3: 'Notable+', 4: 'Rare' };
+function log(msg, type, rarity) {
+  logEntries.push({ ts: `Y${G.year} ${SEASONS[G.season]}`, msg, type, rarity: rarity || 1 });
   if (logEntries.length > 200) logEntries.shift();
   renderLog();
 }
+
+const logRaritySlider = document.getElementById('log-rarity');
+const logRarityLabel = document.getElementById('log-rarity-label');
+logRaritySlider.addEventListener('input', () => {
+  logRarity = parseInt(logRaritySlider.value);
+  logRarityLabel.textContent = RARITY_LABELS[logRarity];
+  renderLog();
+});
 
 function linkifyDwarfNames(msg) {
   for (const d of G.dwarves) {
@@ -2817,14 +2842,29 @@ function linkifyDwarfNames(msg) {
   return msg;
 }
 
+function stripDwarfName(msg) {
+  return msg.replace(/^[^\s]+\s/, '');
+}
+
 function renderLog() {
   const el = document.getElementById('log-body');
   const atBottom = el.scrollTop + el.clientHeight >= el.scrollHeight - 20;
-  const recent = logEntries.slice(-60);
+  const filtered = logEntries.filter(e => e.rarity >= logRarity).slice(-60);
+  // Collapse consecutive similar entries
+  const collapsed = [];
+  for (const e of filtered) {
+    const prev = collapsed.length ? collapsed[collapsed.length - 1] : null;
+    if (prev && prev.type === e.type && stripDwarfName(prev.msg) === stripDwarfName(e.msg)) {
+      prev.count = (prev.count || 1) + 1;
+    } else {
+      collapsed.push({ ...e, count: 1 });
+    }
+  }
   // Note: innerHTML used with internal game state only (dwarf names), not user input
-  el.innerHTML = recent.map(e =>
-    `<div class="log-entry t-${e.type}"><span class="ts">${e.ts}</span><span class="msg">${linkifyDwarfNames(e.msg)}</span></div>`
-  ).join('');
+  el.innerHTML = collapsed.map(e => {
+    const countBadge = e.count > 1 ? `<span class="log-count">\u00d7${e.count}</span>` : '';
+    return `<div class="log-entry t-${e.type}"><span class="ts">${e.ts}</span><span class="msg">${linkifyDwarfNames(e.msg)}${countBadge}</span></div>`;
+  }).join('');
   if (atBottom) el.scrollTop = el.scrollHeight;
 }
 
@@ -3732,22 +3772,21 @@ document.getElementById('btn-room').onclick = () => setMode(G.mode === 'build' ?
 document.getElementById('btn-farm').onclick = () => setMode(G.mode === 'farm' ? 'normal' : 'farm');
 document.getElementById('btn-road').onclick = () => setMode(G.mode === 'road' ? 'normal' : 'road');
 
+const SPEED_STEPS = [0, 1, 2, 5];
+const SPEED_LABELS = ['⏸', '1x', '2x', '5x'];
+const speedSlider = document.getElementById('speed-slider');
+const speedVal = document.getElementById('speed-val');
 function updateSpeedUI() {
-  document.querySelectorAll('.speed-btn').forEach(b => b.classList.remove('active'));
-  if (G.paused) document.getElementById('btn-pause').classList.add('active');
-  else {
-    const btn = document.querySelector(`.speed-btn[data-speed="${G.speed}"]`);
-    if (btn) btn.classList.add('active');
-  }
+  const idx = G.paused ? 0 : SPEED_STEPS.indexOf(G.speed);
+  speedSlider.value = idx >= 0 ? idx : 1;
+  speedVal.textContent = G.paused ? '⏸' : G.speed + 'x';
 }
-document.querySelectorAll('.speed-btn').forEach(btn => {
-  btn.addEventListener('click', () => {
-    const spd = parseInt(btn.dataset.speed);
-    if (spd === 0) G.paused = !G.paused;
-    else { G.speed = spd; G.paused = false; }
-    if (gameWorker) gameWorker.postMessage({ type: 'control', speed: G.speed, paused: G.paused });
-    updateSpeedUI();
-  });
+speedSlider.addEventListener('input', () => {
+  const idx = parseInt(speedSlider.value);
+  if (idx === 0) { G.paused = true; }
+  else { G.paused = false; G.speed = SPEED_STEPS[idx]; }
+  if (gameWorker) gameWorker.postMessage({ type: 'control', speed: G.speed, paused: G.paused });
+  updateSpeedUI();
 });
 
 // ---- Mobile UI setup ----
@@ -3797,6 +3836,20 @@ if (isMobile) {
   if (splashP && splashP.textContent.includes('Pan with WASD')) {
     splashP.textContent = 'Tap to inspect. Drag to pan. Pinch to zoom.';
   }
+}
+
+// ---- Minimap click-to-jump (desktop) ----
+if (!isMobile) {
+  const mmEl = document.getElementById('minimap');
+  mmEl.addEventListener('mousedown', e => {
+    e.stopPropagation();
+    const rect = mmEl.getBoundingClientRect();
+    const tx = (e.clientX - rect.left) / rect.width * MAP_W;
+    const ty = (e.clientY - rect.top) / rect.height * MAP_H;
+    G.cam.x = tx * TILE - canvas.width / 2;
+    G.cam.y = ty * TILE - canvas.height / 2;
+    G.cam.y = Math.max(-TILE * 5, Math.min(MAP_H * TILE - canvas.height + TILE * 5, G.cam.y));
+  });
 }
 
 // ---- Dwarf Search ----
@@ -4381,7 +4434,7 @@ function initWorker() {
           }
         }
         // Display buffered logs
-        for (const l of data.logs) log(l.msg, l.type);
+        for (const l of data.logs) log(l.msg, l.type, l.rarity);
         // Show buffered toasts
         for (const t of data.toasts) {
           if (typeof DAUB !== 'undefined' && DAUB.toast) DAUB.toast(t);
