@@ -12,9 +12,9 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - **Wide biome transitions**: 3-pass scatter system (12%/8%/5%) with 8-direction bleed creates organic ~3-tile gradient zones between biomes
 - **Forest islands**: noise-based forest clusters naturally dot the plains for visual variety and wood sources
 - Terrain speed system with Dijkstra pathfinding (mountains = slow, roads = fast, spatial indexing for O(1) neighbor lookups)
-- Auto-generated roads between cities using A* (land-only, no ocean crossing)
-- 3-tier road system: gravel (🟫 1 stone) → asphalt (⬛ 2 stone + 1 iron) → railroad (🛤️ 3 iron + 2 wood), each progressively faster
-- **Road gap auto-repair**: dwarves detect broken single-lane roads (1-2 tile gaps) within 10 tiles and auto-fix them using 1 stone
+- Auto-generated dirt paths between cities using A* (land-only, no ocean crossing); dwarves upgrade over time
+- 4-tier road system: dirt path (👣 free) → gravel (🟫 1 stone) → asphalt (⬛ 2 stone + 1 iron) → railroad (🟰 rotated on ⬛, 3 iron + 2 wood), each progressively faster
+- **Road gap auto-repair**: dwarves detect broken single-lane roads (1-2 tile gaps) within 10 tiles and auto-fix them with a dirt path
 - **Persistent terrain**: all tile changes (builds, farms, roads, mines, designations) saved as deltas and restored on reload
 - **Loop Hero rendering**: adjacent same-type terrain tiles grouped into larger squares with scaled emojis (greedy cover, world-aligned for scroll stability)
 - **Shore dithering**: ocean-beach edges get extended pixel dithering for natural coastline transitions
@@ -63,7 +63,7 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - 30% trigger chance per meeting to prevent spam
 
 ### Vehicles & Transport
-- **Horse carts** 🐴: built at cities with wood + cloth; haul goods between nearby cities on roads
+- **Horse carts** 🐴: built at cities with wood + cloth; haul goods between nearby cities on dirt paths or better
 - **Cars** 🚗: manufactured at factories (iron + wood); faster road transport with larger cargo capacity
 - **Trains** 🚂: require railroad tiles; highest capacity bulk transport between connected cities
 - **Factories** 🏭: auto-placed near cities with sufficient iron; produce cars once per year
@@ -134,14 +134,14 @@ Pay to upgrade a dwarf's AI reasoning tier via Polar.sh. Sponsored dwarves get a
 - **AI:** OpenRouter via Vercel AI SDK v6 + Zod v4 schemas
 - **Payments:** Polar.sh (@polar-sh/sdk)
 - **Frontend:** Vanilla JS canvas + DAUB UI (grunge theme)
-- **Tests:** Vitest (355 tests across 21 files)
+- **Tests:** Vitest (366 tests across 21 files)
 
 ## Development
 
 ```bash
 npm install
 npm run dev              # local dev server
-npm test                 # run 355 tests
+npm test                 # run 366 tests
 npm run test:watch       # vitest watch mode
 npm run db:migrate:local # apply D1 migrations locally
 npm run db:migrate:remote # apply D1 migrations to production
@@ -195,5 +195,5 @@ src/guardrails/        # Budget + rate limiting
 src/db/state.ts        # D1 state persistence
 migrations/            # D1 SQL migrations
 scripts/               # Import/seed scripts
-tests/                 # 21 test files, 355 tests
+tests/                 # 21 test files, 366 tests
 ```

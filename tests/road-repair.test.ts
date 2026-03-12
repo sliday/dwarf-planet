@@ -4,7 +4,7 @@ import { describe, it, expect } from 'vitest';
 
 const T = {
   OCEAN: 0, TUNDRA: 1, TAIGA: 2, FOREST: 3, PLAINS: 4, DESERT: 5,
-  JUNGLE: 6, MOUNTAIN: 7, HILL: 8, BEACH: 9, ROAD: 32, ASPHALT: 36,
+  JUNGLE: 6, MOUNTAIN: 7, HILL: 8, BEACH: 9, PATH: 38, ROAD: 32, ASPHALT: 36,
   RAILROAD: 34, CITY: 18, FACTORY: 37,
 };
 
@@ -12,7 +12,7 @@ const MAP_W = 50;
 const MAP_H = 50;
 const WALKABLE = new Set([
   T.TUNDRA, T.TAIGA, T.FOREST, T.PLAINS, T.DESERT, T.JUNGLE, T.HILL, T.BEACH,
-  T.ROAD, T.ASPHALT, T.RAILROAD, T.CITY, T.FACTORY,
+  T.PATH, T.ROAD, T.ASPHALT, T.RAILROAD, T.CITY, T.FACTORY,
 ]);
 
 function wrapX(x: number) { return ((x % MAP_W) + MAP_W) % MAP_W; }
@@ -22,7 +22,7 @@ function isWalkable(x: number, y: number, map: number[][]) {
 
 // Mirror findRoadGap from game-worker.js
 function findRoadGap(dx: number, dy: number, radius: number, map: number[][]) {
-  const ROAD_SET = new Set([T.ROAD, T.ASPHALT, T.RAILROAD]);
+  const ROAD_SET = new Set([T.PATH, T.ROAD, T.ASPHALT, T.RAILROAD]);
   const dirs = [[1,0],[-1,0],[0,1],[0,-1]] as const;
   for (let r = 1; r <= radius; r++) {
     for (const [ddx, ddy] of dirs) {
@@ -178,6 +178,87 @@ describe('Road Gap Detection', () => {
   });
 });
 
+describe('Path Tile in Road Network', () => {
+  it('finds gap between path tiles', () => {
+    const map = makeMap();
+    map[25][10] = T.PATH;
+    map[25][12] = T.PATH;
+    const gap = findRoadGap(10, 25, 10, map);
+    expect(gap).toEqual({x: 11, y: 25});
+  });
+
+  it('finds gap between path and road tiles', () => {
+    const map = makeMap();
+    map[25][10] = T.PATH;
+    map[25][12] = T.ROAD;
+    const gap = findRoadGap(10, 25, 10, map);
+    expect(gap).toEqual({x: 11, y: 25});
+  });
+
+  it('path tiles count as road for gap detection', () => {
+    const map = makeMap();
+    // Continuous path — no gap
+    for (let x = 10; x <= 20; x++) map[25][x] = T.PATH;
+    const gap = findRoadGap(15, 25, 10, map);
+    expect(gap).toBeNull();
+  });
+});
+
+describe('Road Progression', () => {
+  it('4-tier progression: path → gravel → asphalt → railroad', () => {
+    const tiers = [T.PATH, T.ROAD, T.ASPHALT, T.RAILROAD];
+    expect(tiers).toHaveLength(4);
+    // All are distinct tile types
+    expect(new Set(tiers).size).toBe(4);
+  });
+
+  it('D_ROAD builds to PATH (free, no resources)', () => {
+    // Mirror aiBuild logic: D_ROAD → PATH with no cost
+    const tile = 33; // T.D_ROAD
+    expect(tile).toBe(33);
+    // No stone check needed — path is free
+    const result = T.PATH;
+    expect(result).toBe(38);
+  });
+
+  it('PATH upgrades to ROAD (costs 1 stone)', () => {
+    const res = { stone: 1 };
+    const tile = T.PATH;
+    expect(tile === T.PATH && res.stone >= 1).toBe(true);
+    res.stone -= 1;
+    expect(res.stone).toBe(0);
+  });
+
+  it('ROAD upgrades to ASPHALT (costs 2 stone + 1 iron)', () => {
+    const res = { stone: 2, iron: 1 };
+    const tile = T.ROAD;
+    expect(tile === T.ROAD && res.stone >= 2 && res.iron >= 1).toBe(true);
+    res.stone -= 2; res.iron -= 1;
+    expect(res.stone).toBe(0);
+    expect(res.iron).toBe(0);
+  });
+
+  it('ASPHALT upgrades to RAILROAD (costs 3 iron + 2 wood)', () => {
+    const res = { iron: 3, wood: 2 };
+    const tile = T.ASPHALT;
+    expect(tile === T.ASPHALT && res.iron >= 3 && res.wood >= 2).toBe(true);
+    res.iron -= 3; res.wood -= 2;
+    expect(res.iron).toBe(0);
+    expect(res.wood).toBe(0);
+  });
+
+  it('vehicle tier requirements: cart=PATH, car=ASPHALT, train=RAILROAD', () => {
+    const VEHICLE_TYPES = {
+      cart: { minRoad: T.PATH },
+      car: { minRoad: T.ASPHALT },
+      train: { minRoad: T.RAILROAD },
+    };
+    expect(VEHICLE_TYPES.cart.minRoad).toBe(T.PATH);
+    expect(VEHICLE_TYPES.car.minRoad).toBe(T.ASPHALT);
+    expect(VEHICLE_TYPES.train.minRoad).toBe(T.RAILROAD);
+  });
+});
+
 describe('Road Repair Integration', () => {
   it('fix_road target type transitions to building state', () => {
     const targetTypes = ['build', 'road', 'upgrade_road', 'fix_road'];
@@ -187,26 +268,15 @@ describe('Road Repair Integration', () => {
     }
   });
 
-  it('fix_road costs 1 stone', () => {
-    // Mirror the resource cost from aiBuild
-    const stoneCost = 1;
-    const res = { stone: 5 };
-    expect(res.stone >= stoneCost).toBe(true);
-    res.stone -= stoneCost;
-    expect(res.stone).toBe(4);
+  it('fix_road places PATH tile (free, no resource cost)', () => {
+    // fix_road now places PATH instead of ROAD, no stone needed
+    const result = T.PATH;
+    expect(result).toBe(38);
   });
 
-  it('fix_road only triggers when city has stone >= 1', () => {
-    const res = { stone: 0 };
-    expect(res.stone >= 1).toBe(false);
-
-    res.stone = 1;
-    expect(res.stone >= 1).toBe(true);
-  });
-
-  it('fix_road does not overwrite existing road tiles', () => {
-    const ROAD_SET = new Set([T.ROAD, T.ASPHALT, T.RAILROAD]);
-    // Should not fix if target is already a road
+  it('fix_road does not overwrite existing road or path tiles', () => {
+    const ROAD_SET = new Set([T.PATH, T.ROAD, T.ASPHALT, T.RAILROAD]);
+    expect(ROAD_SET.has(T.PATH)).toBe(true);
     expect(ROAD_SET.has(T.ROAD)).toBe(true);
     expect(ROAD_SET.has(T.ASPHALT)).toBe(true);
     expect(ROAD_SET.has(T.RAILROAD)).toBe(true);

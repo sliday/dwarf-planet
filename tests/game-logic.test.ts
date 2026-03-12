@@ -550,6 +550,7 @@ describe('Terrain Speed System', () => {
     JUNGLE: 3,
     BEACH: 1,
     TAIGA: 2,
+    PATH: 1,
     ROAD: 0.7,
     RAILROAD: 0.3,
     CITY: 1,
@@ -565,12 +566,25 @@ describe('Terrain Speed System', () => {
     expect(TERRAIN_SPEEDS.OCEAN).toBe(0);
   });
 
+  it('path has no speed advantage over plains', () => {
+    expect(TERRAIN_SPEEDS.PATH).toBe(TERRAIN_SPEEDS.PLAINS);
+  });
+
+  it('road is faster than path', () => {
+    expect(TERRAIN_SPEEDS.ROAD).toBeLessThan(TERRAIN_SPEEDS.PATH);
+  });
+
   it('road is faster than plains', () => {
     expect(TERRAIN_SPEEDS.ROAD).toBeLessThan(TERRAIN_SPEEDS.PLAINS);
   });
 
   it('railroad is fastest', () => {
     expect(TERRAIN_SPEEDS.RAILROAD).toBeLessThan(TERRAIN_SPEEDS.ROAD);
+  });
+
+  it('road progression: path → gravel → asphalt → railroad', () => {
+    expect(TERRAIN_SPEEDS.PATH).toBeGreaterThan(TERRAIN_SPEEDS.ROAD);
+    expect(TERRAIN_SPEEDS.ROAD).toBeGreaterThan(TERRAIN_SPEEDS.RAILROAD);
   });
 
   it('mountain is slowest walkable terrain', () => {

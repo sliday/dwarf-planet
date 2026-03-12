@@ -8,12 +8,12 @@ const T = {
   MUSHROOM:16,FARM:17,CITY:18,D_MINE:19,D_BUILD:20,D_FARM:21,
   IRON_ORE:22,GOLD_VEIN:23,GEMS:24,BERRY_BUSH:25,HERB_PATCH:26,CLAY:27,
   FISH_SPOT:28,DEER:29,CORAL:30,CRAB:31,ROAD:32,D_ROAD:33,RAILROAD:34,
-  GRAVE:35,ASPHALT:36,FACTORY:37
+  GRAVE:35,ASPHALT:36,FACTORY:37,PATH:38
 };
 const WALKABLE = new Set([
   T.TUNDRA,T.TAIGA,T.FOREST,T.PLAINS,T.DESERT,T.JUNGLE,T.HILL,T.BEACH,T.MOUNTAIN,
   T.FLOOR,T.STOCKPILE,T.BED,T.TABLE,T.DOOR,T.MUSHROOM,T.FARM,T.CITY,
-  T.D_MINE,T.D_FARM,T.D_ROAD,T.ROAD,T.ASPHALT,T.RAILROAD,
+  T.D_MINE,T.D_FARM,T.D_ROAD,T.PATH,T.ROAD,T.ASPHALT,T.RAILROAD,
   T.BERRY_BUSH,T.HERB_PATCH,T.CLAY,T.DEER,T.CRAB,
   T.GRAVE,T.FACTORY
 ]);
@@ -28,7 +28,7 @@ const TERRAIN_PROPS = {
   [T.STOCKPILE]:{speed:1},[T.BED]:{speed:1},[T.TABLE]:{speed:1},[T.DOOR]:{speed:1},
   [T.MUSHROOM]:{speed:1},[T.FARM]:{speed:1},[T.CITY]:{speed:1},
   [T.D_MINE]:{speed:1},[T.D_BUILD]:{speed:0},[T.D_FARM]:{speed:1},[T.D_ROAD]:{speed:1},
-  [T.ROAD]:{speed:0.7},[T.ASPHALT]:{speed:0.4},[T.IRON_ORE]:{speed:4},[T.GOLD_VEIN]:{speed:4},[T.GEMS]:{speed:4},
+  [T.PATH]:{speed:1},[T.ROAD]:{speed:0.7},[T.ASPHALT]:{speed:0.4},[T.IRON_ORE]:{speed:4},[T.GOLD_VEIN]:{speed:4},[T.GEMS]:{speed:4},
   [T.BERRY_BUSH]:{speed:1},[T.HERB_PATCH]:{speed:1},[T.CLAY]:{speed:1},
   [T.FISH_SPOT]:{speed:0},[T.DEER]:{speed:1},[T.CORAL]:{speed:0},[T.CRAB]:{speed:1},
   [T.RAILROAD]:{speed:0.2},
@@ -36,7 +36,7 @@ const TERRAIN_PROPS = {
 };
 const SHIP_COST = { wood:10, cloth:3, iron:2 }, SHIP_CARGO_MAX = 20;
 const VEHICLE_TYPES = {
-  cart:  { emoji:'\uD83D\uDC34', capacity:8,  minRoad:T.ROAD,     name:'Horse Cart' },
+  cart:  { emoji:'\uD83D\uDC34', capacity:8,  minRoad:T.PATH,     name:'Horse Cart' },
   car:   { emoji:'\uD83D\uDE97', capacity:15, minRoad:T.ASPHALT,  name:'Car' },
   train: { emoji:'\uD83D\uDE82', capacity:40, minRoad:T.RAILROAD, name:'Train' },
 };
@@ -67,8 +67,8 @@ const TERRAIN_CRAFT_ITEMS = {
 
 // Animal types
 const ANIMAL_TYPES = {
-  cat:     {emoji:'\uD83D\uDC31',hp:4, ac:12,atk:0,dmg:0,       speed:0.3,food:1, danger:false,pet:true, terrain:[T.PLAINS,T.FOREST,T.ROAD]},
-  dog:     {emoji:'\uD83D\uDC36',hp:6, ac:11,atk:0,dmg:0,       speed:0.4,food:2, danger:false,pet:true, terrain:[T.PLAINS,T.FOREST,T.ROAD,T.DESERT]},
+  cat:     {emoji:'\uD83D\uDC31',hp:4, ac:12,atk:0,dmg:0,       speed:0.3,food:1, danger:false,pet:true, terrain:[T.PLAINS,T.FOREST,T.PATH,T.ROAD]},
+  dog:     {emoji:'\uD83D\uDC36',hp:6, ac:11,atk:0,dmg:0,       speed:0.4,food:2, danger:false,pet:true, terrain:[T.PLAINS,T.FOREST,T.PATH,T.ROAD,T.DESERT]},
   monkey:  {emoji:'\uD83D\uDC12',hp:5, ac:13,atk:3,dmg:'1d4',   speed:0.5,food:2, danger:true, pet:false,terrain:[T.JUNGLE]},
   wolf:    {emoji:'\uD83D\uDC3A',hp:11,ac:13,atk:4,dmg:'2d4',   speed:0.6,food:3, danger:true, pet:false,terrain:[T.FOREST,T.TUNDRA]},
   bear:    {emoji:'\uD83D\uDC3B',hp:19,ac:11,atk:5,dmg:'2d6',   speed:0.3,food:8, danger:true, pet:false,terrain:[T.FOREST,T.MOUNTAIN]},
@@ -628,6 +628,7 @@ function tryTrade(d) {
 function findVehicleRoute(fromCity, toCity, minRoad) {
   const allowedTiles = minRoad === T.RAILROAD ? new Set([T.RAILROAD,T.CITY,T.FACTORY])
     : minRoad === T.ASPHALT ? new Set([T.ASPHALT,T.RAILROAD,T.CITY,T.FACTORY])
+    : minRoad === T.PATH ? new Set([T.PATH,T.ROAD,T.ASPHALT,T.RAILROAD,T.CITY,T.FACTORY])
     : new Set([T.ROAD,T.ASPHALT,T.RAILROAD,T.CITY,T.FACTORY]);
   const visited = new Set();
   const parent = new Map();
@@ -666,7 +667,7 @@ function tryTradeCaravan(d) {
   if (!home || !home.res) return false;
   if (d.hunger < 30 || d.energy < 25) return false;
   // Find a different city reachable by road (BFS limited to road/asphalt/railroad tiles)
-  const roadTiles = new Set([T.ROAD, T.ASPHALT, T.RAILROAD, T.CITY]);
+  const roadTiles = new Set([T.PATH, T.ROAD, T.ASPHALT, T.RAILROAD, T.CITY]);
   const target = bfs(d.x, d.y, (x, y) => {
     const t = G.map[wrapY(y)][wrapX(x)];
     if (t !== T.CITY) return false;
@@ -696,7 +697,8 @@ function tryTradeCaravan(d) {
     const vt = VEHICLE_TYPES[vehicle.type];
     const pairKey = [home.id, destCity.id].sort().join('-');
     const tiers = G.roadGraph?.[pairKey];
-    const tierOk = vt.minRoad === T.ROAD ? tiers?.gravel
+    const tierOk = vt.minRoad === T.PATH ? tiers?.path
+      : vt.minRoad === T.ROAD ? tiers?.gravel
       : vt.minRoad === T.ASPHALT ? tiers?.asphalt
       : tiers?.railroad;
     if (tierOk) {
@@ -737,7 +739,7 @@ function tryTradeCaravan(d) {
 }
 
 function findRoadGap(dx, dy, radius) {
-  const ROAD_SET = new Set([T.ROAD, T.ASPHALT, T.RAILROAD]);
+  const ROAD_SET = new Set([T.PATH, T.ROAD, T.ASPHALT, T.RAILROAD]);
   const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
   for (let r = 1; r <= radius; r++) {
     for (const [ddx, ddy] of dirs) {
@@ -823,7 +825,7 @@ function aiIdle(d) {
       }
     }
   }
-  if (res.stone >= 1) {
+  {
     const rp = bfs(d.x, d.y, (x,y) => G.map[y][x] === T.D_ROAD, false);
     if (rp) {
       const last = rp[rp.length-1];
@@ -832,19 +834,19 @@ function aiIdle(d) {
       }
     }
   }
-  if (res.stone >= 1 && Math.random() < 0.2) {
+  if (Math.random() < 0.2) {
     const gap = findRoadGap(d.x, d.y, 10);
     if (gap) {
       const gp = bfs(d.x, d.y, (x,y) => x === gap.x && y === gap.y, false);
       if (gp) { d.target = {type:'fix_road',x:gap.x,y:gap.y}; d.path = gp; d.state = 'walk'; return; }
     }
   }
-  if (((res.stone >= 2 && res.iron >= 1) || (res.iron >= 3 && res.wood >= 2)) && Math.random() < 0.15) {
-    const rrp = bfs(d.x, d.y, (x,y) => G.map[y][x] === T.ROAD || G.map[y][x] === T.ASPHALT, false);
+  if (((res.stone >= 1) || (res.stone >= 2 && res.iron >= 1) || (res.iron >= 3 && res.wood >= 2)) && Math.random() < 0.15) {
+    const rrp = bfs(d.x, d.y, (x,y) => G.map[y][x] === T.PATH || G.map[y][x] === T.ROAD || G.map[y][x] === T.ASPHALT, false);
     if (rrp && rrp.length < 30) {
       const last = rrp[rrp.length-1];
       const lt = G.map[last[1]][last[0]];
-      if (lt === T.ROAD || lt === T.ASPHALT) {
+      if (lt === T.PATH || lt === T.ROAD || lt === T.ASPHALT) {
         d.target = {type:'upgrade_road',x:last[0],y:last[1]}; d.path = rrp; d.state = 'walk'; return;
       }
     }
@@ -1033,16 +1035,21 @@ function aiBuild(d) {
       log(`${d.name} 🧱 built a wall`, 'build', 1);
       addEvent(d, 'build', 'Built a wall');
       d.happiness = Math.min(100, d.happiness + 3);
-    } else if (G.map[y][x] === T.D_ROAD && res.stone >= 1) {
-      res.stone -= 1; mapSet(x, y, T.ROAD); G.stats.built++; G.roadGraphDirty = true;
-      log(`${d.name} 🟫 built a gravel road`, 'build', 1);
-      addEvent(d, 'build', 'Built a road');
-      d.happiness = Math.min(100, d.happiness + 2);
-    } else if (d.target.type === 'fix_road' && res.stone >= 1 && isWalkable(x, y) && G.map[y][x] !== T.ROAD && G.map[y][x] !== T.ASPHALT && G.map[y][x] !== T.RAILROAD) {
-      res.stone -= 1; mapSet(x, y, T.ROAD); G.stats.built++; G.roadGraphDirty = true;
+    } else if (G.map[y][x] === T.D_ROAD) {
+      mapSet(x, y, T.PATH); G.stats.built++; G.roadGraphDirty = true;
+      log(`${d.name} 👣 cleared a dirt path`, 'build', 1);
+      addEvent(d, 'build', 'Cleared a path');
+      d.happiness = Math.min(100, d.happiness + 1);
+    } else if (d.target.type === 'fix_road' && isWalkable(x, y) && G.map[y][x] !== T.PATH && G.map[y][x] !== T.ROAD && G.map[y][x] !== T.ASPHALT && G.map[y][x] !== T.RAILROAD) {
+      mapSet(x, y, T.PATH); G.stats.built++; G.roadGraphDirty = true;
       log(`${d.name} 🔧 repaired a road gap`, 'build', 2);
       addEvent(d, 'build', 'Repaired a road gap');
       d.happiness = Math.min(100, d.happiness + 3);
+    } else if (d.target.type === 'upgrade_road' && G.map[y][x] === T.PATH && res.stone >= 1) {
+      res.stone -= 1; mapSet(x, y, T.ROAD); G.stats.built++; G.roadGraphDirty = true;
+      log(`${d.name} 🟫 paved path to gravel road`, 'build', 1);
+      addEvent(d, 'build', 'Paved path to gravel');
+      d.happiness = Math.min(100, d.happiness + 2);
     } else if (d.target.type === 'upgrade_road' && G.map[y][x] === T.ROAD && res.stone >= 2 && res.iron >= 1) {
       res.stone -= 2; res.iron -= 1; mapSet(x, y, T.ASPHALT); G.stats.built++; G.roadGraphDirty = true;
       log(`${d.name} ⬛ paved road to asphalt!`, 'build', 2);
@@ -1263,7 +1270,7 @@ function autoConnectCities() {
   // A* pathfind on walkable terrain, preferring existing roads
   // Include building tiles so we can path through city centers
   const roadable = new Set([T.PLAINS,T.FOREST,T.TAIGA,T.DESERT,T.TUNDRA,T.HILL,T.BEACH,
-    T.ROAD,T.ASPHALT,T.RAILROAD,T.CITY,T.FACTORY,T.FLOOR,T.FARM,T.D_ROAD,
+    T.PATH,T.ROAD,T.ASPHALT,T.RAILROAD,T.CITY,T.FACTORY,T.FLOOR,T.FARM,T.D_ROAD,
     T.BED,T.STOCKPILE,T.TABLE,T.WALL]);
   const goal = `${cityB.mx},${cityB.my}`;
   const openSet = [{x:cityA.mx, y:cityA.my, g:0, f:0}];
@@ -1286,7 +1293,7 @@ function autoConnectCities() {
       if (ny < 0 || ny >= MAP_H) continue;
       const t = G.map[ny][nx];
       if (!roadable.has(t)) continue;
-      const moveCost = (t === T.ROAD || t === T.ASPHALT || t === T.RAILROAD) ? 0.3
+      const moveCost = (t === T.PATH || t === T.ROAD || t === T.ASPHALT || t === T.RAILROAD) ? 0.3
         : (t === T.CITY || t === T.FACTORY || t === T.FLOOR) ? 0.5
         : (t === T.BED || t === T.STOCKPILE || t === T.TABLE || t === T.WALL) ? 3
         : 1;
@@ -1312,18 +1319,18 @@ function autoConnectCities() {
   }
 
   let roadsBuilt = 0;
-  const dontOverwrite = new Set([T.ROAD,T.ASPHALT,T.RAILROAD,T.CITY,T.FACTORY,T.FLOOR,
+  const dontOverwrite = new Set([T.PATH,T.ROAD,T.ASPHALT,T.RAILROAD,T.CITY,T.FACTORY,T.FLOOR,
     T.BED,T.STOCKPILE,T.TABLE,T.WALL,T.FARM,T.OCEAN,T.GRAVE]);
   for (const [rx, ry] of path) {
     const t = G.map[ry][rx];
     if (!dontOverwrite.has(t)) {
-      mapSet(rx, ry, T.ROAD);
+      mapSet(rx, ry, T.PATH);
       roadsBuilt++;
     }
   }
   if (roadsBuilt > 0) {
     G.roadGraphDirty = true;
-    log(`🛤️ Road built connecting ${cityA.name} ↔ ${cityB.name} (${roadsBuilt} tiles)`, 'city', 4);
+    log(`👣 Path cleared connecting ${cityA.name} ↔ ${cityB.name} (${roadsBuilt} tiles)`, 'city', 4);
   }
 }
 
@@ -1331,6 +1338,7 @@ function autoConnectCities() {
 function rebuildRoadGraph() {
   G.roadGraph = {};
   const tiers = [
+    { name:'path', tiles:new Set([T.PATH,T.ROAD,T.ASPHALT,T.RAILROAD,T.CITY,T.FACTORY]) },
     { name:'gravel', tiles:new Set([T.ROAD,T.ASPHALT,T.RAILROAD,T.CITY,T.FACTORY]) },
     { name:'asphalt', tiles:new Set([T.ASPHALT,T.RAILROAD,T.CITY,T.FACTORY]) },
     { name:'railroad', tiles:new Set([T.RAILROAD,T.CITY,T.FACTORY]) },
