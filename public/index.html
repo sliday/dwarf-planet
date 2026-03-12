@@ -3364,6 +3364,12 @@ function ditherEdges(ctx, px, py, wx, wy) {
     const nx = wrapX(wx + dx), ny = wrapY(wy + dy);
     const nt = G.map[ny][nx];
     if (nt === T.OCEAN && t !== T.BEACH) continue;
+    // Skip shore dither on inland water (small ocean pockets)
+    if (nt === T.OCEAN) {
+      let oc = 0;
+      for (const [ddx, ddy] of [[0,-1],[0,1],[-1,0],[1,0]]) { if (G.map[wrapY(ny+ddy)][wrapX(nx+ddx)] === T.OCEAN) oc++; }
+      if (oc < 3) continue;
+    }
     const sameType = nt === t;
     // Same-type: only dither natural terrain to break grid lines
     if (sameType && !NATURAL_TERRAIN.has(t)) continue;
@@ -3408,7 +3414,10 @@ function patchTile(gx, gy) {
   } else {
     let em = EMOJI[t];
     if (t === T.GRAVE) { const gd = G.graves[`${wx},${wy}`]; if (gd) em = gd.emoji; }
-    if (t === T.BEACH && (wy <= 250 || wy >= 750)) em = null;
+    if (t === T.BEACH) {
+      const adjOcean = [[-1,0],[1,0],[0,-1],[0,1]].some(([dy,dx]) => { const ny = wrapY(wy+dy), nx = wrapX(wx+dx); return G.map[ny][nx] === T.OCEAN; });
+      if (!adjOcean || wy <= 250 || wy >= 750) em = null;
+    }
     if (em && t !== T.OCEAN) {
       try { tileBufferCtx.drawImage(getEmojiImg(em), px, py); } catch (e) {}
     }
@@ -3507,7 +3516,11 @@ function renderTileBuffer(startGX, startGY, endGX, endGY) {
       } else {
         let em = EMOJI[t];
         if (t === T.GRAVE && bestN === 1) { const gd = G.graves[`${wrapX(startGX + c)},${wrapY(startGY + r)}`]; if (gd) em = gd.emoji; }
-        if (t === T.BEACH) { const wy = wrapY(startGY + r); if (wy <= 250 || wy >= 750) em = null; }
+        if (t === T.BEACH) {
+          const bwy = wrapY(startGY + r), bwx = wrapX(startGX + c);
+          const adjOcean = [[-1,0],[1,0],[0,-1],[0,1]].some(([dy,dx]) => { const ny = wrapY(bwy+dy), nx = wrapX(bwx+dx); return G.map[ny][nx] === T.OCEAN; });
+          if (!adjOcean || bwy <= 250 || bwy >= 750) em = null;
+        }
         if (em && t !== T.OCEAN) {
           try { tileBufferCtx.drawImage(getEmojiImg(em, bestN), px, py); } catch (e) {}
         }
