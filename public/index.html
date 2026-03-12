@@ -2457,6 +2457,14 @@ const ANIMAL_TYPES_FB = {
   gorilla:{hp:20,ac:12,atk:6,dmg:'2d6',speed:0.4,food:5,danger:true,pet:false,terrain:[T.JUNGLE]},
   boar:{hp:11,ac:12,atk:3,dmg:'1d6',speed:0.5,food:4,danger:true,pet:false,terrain:[T.FOREST,T.PLAINS]},
   scorpion:{hp:3,ac:15,atk:2,dmg:'1d4+poison',speed:0.2,food:0,danger:true,pet:false,terrain:[T.DESERT]},
+  bee:{hp:1,ac:16,atk:1,dmg:'1d2+poison',speed:0.9,food:0,danger:true,pet:false,terrain:[T.JUNGLE,T.FOREST]},
+  crocodile:{hp:18,ac:12,atk:5,dmg:'2d8',speed:0.3,food:6,danger:true,pet:false,terrain:[T.JUNGLE,T.BEACH]},
+  turtle:{hp:8,ac:16,atk:0,dmg:0,speed:0.1,food:3,danger:false,pet:false,terrain:[T.BEACH]},
+  parrot:{hp:3,ac:14,atk:0,dmg:0,speed:0.8,food:1,danger:false,pet:true,terrain:[T.JUNGLE]},
+  spider:{hp:2,ac:15,atk:2,dmg:'1d4+poison',speed:0.3,food:0,danger:true,pet:false,terrain:[T.JUNGLE,T.TAIGA]},
+  deer:{hp:8,ac:12,atk:0,dmg:0,speed:0.7,food:5,danger:false,pet:false,terrain:[T.FOREST,T.PLAINS,T.TAIGA]},
+  owl:{hp:4,ac:14,atk:2,dmg:'1d4',speed:0.7,food:1,danger:false,pet:false,terrain:[T.FOREST,T.TAIGA]},
+  shark:{hp:22,ac:12,atk:6,dmg:'2d8',speed:0.8,food:0,danger:true,pet:false,terrain:[T.BEACH]},
 };
 function rollD(n) { return 1 + Math.floor(Math.random() * n); }
 function rollDmg(str) {

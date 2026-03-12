@@ -64,6 +64,14 @@ const ANIMAL_TYPES = {
   gorilla: {emoji:'\uD83E\uDD8D',hp:20,ac:12,atk:6,dmg:'2d6',   speed:0.4,food:5, danger:true, pet:false,terrain:[T.JUNGLE]},
   boar:    {emoji:'\uD83D\uDC17',hp:11,ac:12,atk:3,dmg:'1d6',   speed:0.5,food:4, danger:true, pet:false,terrain:[T.FOREST,T.PLAINS]},
   scorpion:{emoji:'\uD83E\uDD82',hp:3, ac:15,atk:2,dmg:'1d4+poison',speed:0.2,food:0,danger:true,pet:false,terrain:[T.DESERT]},
+  bee:     {emoji:'\uD83D\uDC1D',hp:1, ac:16,atk:1,dmg:'1d2+poison',speed:0.9,food:0,danger:true,pet:false,terrain:[T.JUNGLE,T.FOREST]},
+  crocodile:{emoji:'\uD83D\uDC0A',hp:18,ac:12,atk:5,dmg:'2d8',speed:0.3,food:6,danger:true,pet:false,terrain:[T.JUNGLE,T.BEACH]},
+  turtle:  {emoji:'\uD83D\uDC22',hp:8, ac:16,atk:0,dmg:0,       speed:0.1,food:3, danger:false,pet:false,terrain:[T.BEACH]},
+  parrot:  {emoji:'\uD83E\uDD9C',hp:3, ac:14,atk:0,dmg:0,       speed:0.8,food:1, danger:false,pet:true, terrain:[T.JUNGLE]},
+  spider:  {emoji:'\uD83D\uDD77\uFE0F',hp:2, ac:15,atk:2,dmg:'1d4+poison',speed:0.3,food:0,danger:true,pet:false,terrain:[T.JUNGLE,T.TAIGA]},
+  deer:    {emoji:'\uD83E\uDD8C',hp:8, ac:12,atk:0,dmg:0,       speed:0.7,food:5, danger:false,pet:false,terrain:[T.FOREST,T.PLAINS,T.TAIGA]},
+  owl:     {emoji:'\uD83E\uDD89',hp:4, ac:14,atk:2,dmg:'1d4',   speed:0.7,food:1, danger:false,pet:false,terrain:[T.FOREST,T.TAIGA]},
+  shark:   {emoji:'\uD83E\uDD88',hp:22,ac:12,atk:6,dmg:'2d8',   speed:0.8,food:0, danger:true,pet:false,terrain:[T.BEACH]},
 };
 const MAX_ANIMALS = 150;
 
@@ -427,6 +435,32 @@ function tickDwarf(d) {
   if (d.hp <= 0) { d.state = 'dead'; d.dead = true; placeGrave(d); log(`${d.name} \u2620\uFE0F has died!`, 'system', 4, null, d.x, d.y); addEvent(d, 'death', 'Died in combat'); return; }
   if (d.poisonTicks > 0) { d.hp -= 1; d.poisonTicks--; if (d.poisonTicks === 0) log(`${d.name} recovered from poison`, 'system', 2); }
   if (d.hp < d.maxHp && d.hunger > 20 && d.energy > 30 && G.tick % 50 === 0) d.hp = Math.min(d.maxHp, d.hp + 1);
+
+  // Flee from dangerous animals (low HP or weak STR)
+  if (d.state !== 'fleeing' && d.state !== 'sailing' && d.hp <= d.maxHp * 0.6) {
+    const nearby = nearbyAnimals(d.x, d.y);
+    for (const a of nearby) {
+      if (a.dead) continue;
+      const at = ANIMAL_TYPES[a.type];
+      if (!at || !at.danger) continue;
+      const dx = Math.abs(d.x - a.x), dy = Math.abs(d.y - a.y);
+      if (dx <= 3 && dy <= 3) {
+        d.state = 'fleeing'; d.target = null; d.path = []; d.fleeFrom = {x:a.x, y:a.y}; d.timer = 8 + rollD(6);
+        break;
+      }
+    }
+  }
+  if (d.state === 'fleeing') {
+    d.timer--;
+    if (d.timer <= 0) { d.state = 'idle'; d.fleeFrom = null; return; }
+    if (d.fleeFrom && Math.random() < 0.7) {
+      const fx = d.x > d.fleeFrom.x ? 1 : d.x < d.fleeFrom.x ? -1 : (Math.random()<0.5?1:-1);
+      const fy = d.y > d.fleeFrom.y ? 1 : d.y < d.fleeFrom.y ? -1 : (Math.random()<0.5?1:-1);
+      const nx = wrapX(d.x + fx), ny = d.y + fy;
+      if (ny >= 0 && ny < MAP_H && isWalkable(nx, ny)) { d.x = nx; d.y = ny; }
+    }
+    return;
+  }
 
   d.hunger = Math.max(0, d.hunger - 0.03);
   d.energy = Math.max(0, d.energy - 0.02);
@@ -1304,7 +1338,7 @@ function tickAnimal(a) {
   }
 
   // Wander: stationary animals (scorpion, snake) rarely move
-  const stationary = a.type === 'scorpion' || a.type === 'snake';
+  const stationary = a.type === 'scorpion' || a.type === 'snake' || a.type === 'spider' || a.type === 'turtle';
   if (stationary && Math.random() > 0.05) return;
   if (Math.random() < 0.3) {
     const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
