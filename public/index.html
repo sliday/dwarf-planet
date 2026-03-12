@@ -3154,25 +3154,34 @@ function varyColor(hex, x, y) {
   return `rgb(${Math.max(0,Math.min(255,r+v+tw))},${Math.max(0,Math.min(255,g+v+Math.round(tw*0.6)))},${Math.max(0,Math.min(255,b+v-Math.round(tw*0.4)))})`;
 }
 
+const NATURAL_TERRAIN = new Set([
+  T.TUNDRA, T.TAIGA, T.FOREST, T.PLAINS, T.DESERT,
+  T.JUNGLE, T.MOUNTAIN, T.HILL, T.BEACH, T.FARM, T.MUSHROOM
+]);
+
 function ditherEdges(ctx, px, py, wx, wy) {
   const t = G.map[wy][wx];
   if (t === T.OCEAN) return;
-  // [dx, dy, horizontal-edge?]
   const edges = [[0,-1,true],[0,1,true],[-1,0,false],[1,0,false]];
   for (const [dx, dy, horiz] of edges) {
     const nx = wrapX(wx + dx), ny = wy + dy;
     if (ny < 0 || ny >= MAP_H) continue;
     const nt = G.map[ny][nx];
-    if (nt === t || nt === T.OCEAN) continue;
+    if (nt === T.OCEAN) continue;
+    const sameType = nt === t;
+    // Same-type: only dither natural terrain to break grid lines
+    if (sameType && !NATURAL_TERRAIN.has(t)) continue;
+    const depth = sameType ? 2 : 4;
     const nBase = BG_COLORS[nt] || '#042040';
     ctx.fillStyle = varyColor(nBase, nx, ny);
     const h = tileHash(wx * 7 + dx, wy * 13 + dy);
-    for (let d = 0; d < 4; d++) {
-      const mask = (d === 0) ? 0x55 : (d === 1) ? 0xAA : (d === 2) ? 0x44 : 0x11;
+    for (let d = 0; d < depth; d++) {
       const bits = (h >>> (d * 5)) ^ (d * 0x9E3779B9);
+      // Same-type: sparser pattern (every other pixel, only on edges)
+      const sparseMask = sameType ? 0x92 : ((d === 0) ? 0x55 : (d === 1) ? 0xAA : (d === 2) ? 0x44 : 0x11);
       for (let i = 0; i < TILE; i++) {
-        if (!((bits >>> (i & 7)) & 1) && !((mask >>> (i & 7)) & 1)) continue;
-        if (d >= 3 && (i & 1)) continue;
+        if (!((bits >>> (i & 7)) & 1) && !((sparseMask >>> (i & 7)) & 1)) continue;
+        if (sameType && !((bits >>> ((i + d) & 7)) & 1)) continue;
         if (horiz) {
           const ly = dy < 0 ? d : TILE - 1 - d;
           ctx.fillRect(px + i, py + ly, 1, 1);
