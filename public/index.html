@@ -3503,6 +3503,24 @@ function render() {
   const offsetY = startGY * TILE - G.cam.y;
   ctx.drawImage(tileBuffer, offsetX, offsetY);
 
+  // Road wave animation — subtle brightness pulse traveling along connected roads
+  const now = performance.now() * 0.001;
+  const ROAD_TILES = new Set([T.ROAD, T.ASPHALT, T.RAILROAD]);
+  for (let gy = Math.max(0, startGY); gy < Math.min(MAP_H, endGY); gy++) {
+    for (let gx = startGX; gx < endGX; gx++) {
+      const wx = wrapX(gx);
+      if (!ROAD_TILES.has(G.map[gy][wx])) continue;
+      const wave = Math.sin((wx + gy) * 0.5 + now * 2.0) * 0.5 + 0.5;
+      if (wave < 0.3) continue;
+      const alpha = (wave - 0.3) * 0.12;
+      const px = gx * TILE - G.cam.x;
+      const py = gy * TILE - G.cam.y;
+      if (px < -TILE || py < -TILE || px > w + TILE || py > h + TILE) continue;
+      ctx.fillStyle = `rgba(255,240,200,${alpha})`;
+      ctx.fillRect(px, py, TILE, TILE);
+    }
+  }
+
   // Selection highlight
   if (G.sel) {
     const s = G.sel;
@@ -5194,8 +5212,9 @@ document.getElementById('hud-year-wrap').onclick = () => {
   const graveCount = Object.keys(G.graves || {}).length;
   if (graveCount > 0) {
     const graveRow = document.createElement('div');
-    graveRow.style.cssText = 'font-size:11px;color:#fb4934;margin-bottom:6px';
+    graveRow.style.cssText = 'font-size:11px;color:#fb4934;margin-bottom:6px;cursor:pointer;text-decoration:underline';
     graveRow.textContent = '⚰️ Graveyard: ' + graveCount + ' fallen';
+    graveRow.onclick = () => showGraveyardPanel();
     frag.appendChild(graveRow);
   }
 
