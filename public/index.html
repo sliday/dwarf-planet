@@ -3325,6 +3325,16 @@ window.addEventListener('resize', resize);
 let renderFrameCount = 0;
 
 function tileHash(x, y) { return ((x * 2654435761) ^ (y * 2246822519)) >>> 0; }
+function desertEmoji(wx, wy) {
+  const adjOcean = [[-1,0],[1,0],[0,-1],[0,1]].some(([dy,dx]) => G.map[wrapY(wy+dy)][wrapX(wx+dx)] === T.OCEAN);
+  if (adjOcean) return '🗿';
+  const h = (tileHash(wx, wy) >>> 0) % 100;
+  if (h < 12) return '🌵';
+  if (h < 15) return '🪨';
+  if (h < 17) return '🐪';
+  if (h < 18) return '🐍';
+  return null;
+}
 
 // Temperature model: latitude + seasonal hemisphere shift
 // Returns -1 (frigid) to +1 (scorching)
@@ -3418,6 +3428,7 @@ function patchTile(gx, gy) {
       const adjOcean = [[-1,0],[1,0],[0,-1],[0,1]].some(([dy,dx]) => { const ny = wrapY(wy+dy), nx = wrapX(wx+dx); return G.map[ny][nx] === T.OCEAN; });
       if (!adjOcean || wy <= 250 || wy >= 750) em = null;
     }
+    if (t === T.DESERT) em = desertEmoji(wx, wy);
     if (em && t !== T.OCEAN) {
       try { tileBufferCtx.drawImage(getEmojiImg(em), px, py); } catch (e) {}
     }
@@ -3521,6 +3532,7 @@ function renderTileBuffer(startGX, startGY, endGX, endGY) {
           const adjOcean = [[-1,0],[1,0],[0,-1],[0,1]].some(([dy,dx]) => { const ny = wrapY(bwy+dy), nx = wrapX(bwx+dx); return G.map[ny][nx] === T.OCEAN; });
           if (!adjOcean || bwy <= 250 || bwy >= 750) em = null;
         }
+        if (t === T.DESERT) em = desertEmoji(wrapX(startGX + c), wrapY(startGY + r));
         if (em && t !== T.OCEAN) {
           try { tileBufferCtx.drawImage(getEmojiImg(em, bestN), px, py); } catch (e) {}
         }
