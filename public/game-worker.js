@@ -7,13 +7,15 @@ const T = {
   HILL:8,BEACH:9,FLOOR:10,WALL:11,STOCKPILE:12,BED:13,TABLE:14,DOOR:15,
   MUSHROOM:16,FARM:17,CITY:18,D_MINE:19,D_BUILD:20,D_FARM:21,
   IRON_ORE:22,GOLD_VEIN:23,GEMS:24,BERRY_BUSH:25,HERB_PATCH:26,CLAY:27,
-  FISH_SPOT:28,DEER:29,CORAL:30,CRAB:31,ROAD:32,D_ROAD:33,RAILROAD:34
+  FISH_SPOT:28,DEER:29,CORAL:30,CRAB:31,ROAD:32,D_ROAD:33,RAILROAD:34,
+  GRAVE:35
 };
 const WALKABLE = new Set([
   T.TUNDRA,T.TAIGA,T.FOREST,T.PLAINS,T.DESERT,T.JUNGLE,T.HILL,T.BEACH,T.MOUNTAIN,
   T.FLOOR,T.STOCKPILE,T.BED,T.TABLE,T.DOOR,T.MUSHROOM,T.FARM,T.CITY,
   T.D_MINE,T.D_FARM,T.D_ROAD,T.ROAD,T.RAILROAD,
-  T.BERRY_BUSH,T.HERB_PATCH,T.CLAY,T.DEER,T.CRAB
+  T.BERRY_BUSH,T.HERB_PATCH,T.CLAY,T.DEER,T.CRAB,
+  T.GRAVE
 ]);
 const WILD_FOOD = new Set([T.MUSHROOM,T.BERRY_BUSH,T.CRAB]);
 const GATHERABLE = new Set([T.BERRY_BUSH,T.HERB_PATCH,T.IRON_ORE,T.GOLD_VEIN,T.GEMS,T.FISH_SPOT,T.CRAB,T.DEER,T.CLAY,T.CORAL]);
@@ -105,8 +107,9 @@ const G = {
 
 // Message buffers
 const pendingLogs = [], pendingToasts = [], pendingMapChanges = [];
-function log(msg, type, rarity, cityEmoji) { pendingLogs.push({msg,type,rarity:rarity||1,season:G.season,cityEmoji:cityEmoji||null}); }
+function log(msg, type, rarity, cityEmoji, lx, ly) { pendingLogs.push({msg,type,rarity:rarity||1,season:G.season,cityEmoji:cityEmoji||null,lx:lx??null,ly:ly??null}); }
 function mapSet(x, y, tile) { G.map[y][x] = tile; G.mapDeltas[`${x},${y}`] = tile; pendingMapChanges.push({x,y,tile}); }
+function placeGrave(d) { const wx = wrapX(d.x); if (G.map[d.y] && G.map[d.y][wx] !== T.OCEAN) mapSet(wx, d.y, T.GRAVE); }
 
 // Helpers
 function wrapX(x) { return ((x % MAP_W) + MAP_W) % MAP_W; }
@@ -411,7 +414,7 @@ function tickDwarf(d) {
   }
   // HP system
   if (!d.maxHp) { d.maxHp = 8 + Math.floor((d.stats?.CON||10)/3); d.hp = d.hp ?? d.maxHp; d.ac = d.ac ?? 10+Math.floor(((d.stats?.DEX||10)-10)/2); }
-  if (d.hp <= 0) { d.state = 'dead'; d.dead = true; log(`${d.name} \u2620\uFE0F has died!`, 'system', 4); addEvent(d, 'death', 'Died in combat'); return; }
+  if (d.hp <= 0) { d.state = 'dead'; d.dead = true; placeGrave(d); log(`${d.name} \u2620\uFE0F has died!`, 'system', 4, null, d.x, d.y); addEvent(d, 'death', 'Died in combat'); return; }
   if (d.poisonTicks > 0) { d.hp -= 1; d.poisonTicks--; if (d.poisonTicks === 0) log(`${d.name} recovered from poison`, 'system', 2); }
   if (d.hp < d.maxHp && d.hunger > 20 && d.energy > 30 && G.tick % 50 === 0) d.hp = Math.min(d.maxHp, d.hp + 1);
 
@@ -421,9 +424,9 @@ function tickDwarf(d) {
   if (d.hunger <= 0) {
     d.starveTicks = (d.starveTicks || 0) + 1;
     if (d.starveTicks >= STARVE_DEATH) {
-      log(`${d.name} \u2620\uFE0F starved to death`, 'system', 4);
+      log(`${d.name} \u2620\uFE0F starved to death`, 'system', 4, null, d.x, d.y);
       addEvent(d, 'death', 'Died of starvation');
-      d.dead = true; return;
+      placeGrave(d); d.dead = true; return;
     }
     if (d.starveTicks >= STARVE_IMMOBILE && d.state !== 'starving') {
       d.state = 'starving'; d.target = null; d.path = [];
@@ -1199,8 +1202,8 @@ function animalCombat(a, d) {
       if (String(t.dmg).includes('+poison')) d.poisonTicks = (d.poisonTicks||0) + 3;
       log(`${t.emoji} ${a.type} hit ${d.name} for ${dmg} dmg!`, 'combat', 2);
       if (d.hp <= 0) {
-        d.dead = true; d.state = 'dead';
-        log(`${d.name} \u2620\uFE0F was killed by a ${a.type}!`, 'system', 4);
+        d.dead = true; d.state = 'dead'; placeGrave(d);
+        log(`${d.name} \u2620\uFE0F was killed by a ${a.type}!`, 'system', 4, null, d.x, d.y);
         addEvent(d, 'death', `Killed by a ${a.type}`);
         return;
       }
@@ -1375,7 +1378,8 @@ function tickSeason() {
       for (const d of G.dwarves) {
         d.age = (d.age || 20) + 1;
         if (d.age >= 70 && Math.random() < 0.03 * (d.age - 69)) {
-          log(`${d.name} \u2620\uFE0F passed away at age ${d.age}`, 'system', 4);
+          placeGrave(d);
+          log(`${d.name} \u2620\uFE0F passed away at age ${d.age}`, 'system', 4, null, d.x, d.y);
           addEvent(d, 'death', `Died of old age at ${d.age}`);
           deadIds.push(d.id);
         }

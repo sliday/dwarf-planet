@@ -13,6 +13,8 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - Auto-generated roads between cities using A* (land-only, no ocean crossing)
 - Railroads: dwarves upgrade roads for ultra-fast travel (3 iron + 2 wood per tile)
 - **Persistent terrain**: all tile changes (builds, farms, roads, mines, designations) saved as deltas and restored on reload
+- **Loop Hero rendering**: adjacent same-type terrain tiles grouped into larger squares with scaled emojis (greedy cover, world-aligned for scroll stability)
+- **Graves** (🪦): dwarves leave a tombstone on the map where they died
 - Per-city resources and culturally-named populations
 - Cities auto-expand when population and resources allow (beds, stockpiles, tables)
 
@@ -58,7 +60,7 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - City ideology labels computed from aggregate personality (Militant, Spiritual, Mercantile, etc.)
 - Contextual Mine/Build/Farm/Road designation buttons with drag-to-designate
 - Speed slider (⏸ → 1x → 2x → 5x) for simulation speed control
-- Event log with season emoji timestamps (🌱☀️🍂❄️) and rarity filter with consecutive entry collapsing (×N)
+- Event log with season emoji timestamps (🌱☀️🍂❄️) and rarity filter with consecutive entry collapsing (×N); all events with locations are clickable (pans camera)
 - **Temperature tinting**: HUD and status bar shift warm amber → cool blue based on camera latitude and season
 - **Year resolutions banner**: each new year shows per-city goals (farming, expansion, crafting) based on population stats
 - Footer shows full season + year (e.g. "Autumn, Year 16")
@@ -74,6 +76,7 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - Spatial index (8-tile grid buckets) for O(1) neighbor lookups in sharing/trading
 - Throttled food search with wander cooldown to prevent BFS spam
 - Frame tick cap of 3 prevents lag death spiral
+- Tile buffer patching: individual tile changes painted as 1x1 without full re-render (square cover recalculation only on camera move)
 - Cached measureText for city labels, hoisted Set constants
 - Batch backstory endpoint: 10 dwarves per request, single rate limit check
 - Backstory request queue drains every 15s in batches (not individual calls)
@@ -102,14 +105,14 @@ Pay to upgrade a dwarf's AI reasoning tier via Polar.sh. Sponsored dwarves get a
 - **AI:** OpenRouter via Vercel AI SDK v6 + Zod v4 schemas
 - **Payments:** Polar.sh (@polar-sh/sdk)
 - **Frontend:** Vanilla JS canvas + DAUB UI (grunge theme)
-- **Tests:** Vitest (247 tests across 15 files)
+- **Tests:** Vitest (277 tests across 15 files)
 
 ## Development
 
 ```bash
 npm install
 npm run dev              # local dev server
-npm test                 # run 247 tests
+npm test                 # run 277 tests
 npm run test:watch       # vitest watch mode
 npm run db:migrate:local # apply D1 migrations locally
 npm run db:migrate:remote # apply D1 migrations to production
@@ -163,5 +166,5 @@ src/guardrails/        # Budget + rate limiting
 src/db/state.ts        # D1 state persistence
 migrations/            # D1 SQL migrations
 scripts/               # Import/seed scripts
-tests/                 # 15 test files, 247 tests
+tests/                 # 17 test files, 277 tests
 ```

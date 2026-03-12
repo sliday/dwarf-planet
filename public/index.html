@@ -444,15 +444,24 @@ const T = {
   BERRY_BUSH: 25, HERB_PATCH: 26, CLAY: 27,
   FISH_SPOT: 28, DEER: 29, CORAL: 30, CRAB: 31,
   ROAD: 32, D_ROAD: 33,
-  RAILROAD: 34
+  RAILROAD: 34,
+  GRAVE: 35
 };
+
+const MAX_COVER = 5;
+const GROUPABLE = new Set([
+  T.OCEAN, T.TUNDRA, T.TAIGA, T.FOREST, T.PLAINS, T.DESERT,
+  T.JUNGLE, T.MOUNTAIN, T.HILL, T.BEACH, T.ROAD, T.RAILROAD,
+  T.FARM, T.MUSHROOM
+]);
 
 const WALKABLE = new Set([
   T.TUNDRA, T.TAIGA, T.FOREST, T.PLAINS, T.DESERT, T.JUNGLE, T.HILL, T.BEACH,
   T.MOUNTAIN,
   T.FLOOR, T.STOCKPILE, T.BED, T.TABLE, T.DOOR, T.MUSHROOM, T.FARM, T.CITY,
   T.D_MINE, T.D_FARM, T.D_ROAD, T.ROAD, T.RAILROAD,
-  T.BERRY_BUSH, T.HERB_PATCH, T.CLAY, T.DEER, T.CRAB
+  T.BERRY_BUSH, T.HERB_PATCH, T.CLAY, T.DEER, T.CRAB,
+  T.GRAVE
 ]);
 const WILD_FOOD = new Set([T.MUSHROOM, T.BERRY_BUSH, T.CRAB]);
 const GATHERABLE = new Set([T.BERRY_BUSH, T.HERB_PATCH, T.IRON_ORE, T.GOLD_VEIN, T.GEMS, T.FISH_SPOT, T.CRAB, T.DEER, T.CLAY, T.CORAL]);
@@ -495,6 +504,7 @@ const TERRAIN_PROPS = {
   [T.CORAL]:     { speed: 0, desc: 'Coral reef (walk adjacent)' },
   [T.CRAB]:      { speed: 1, desc: 'Crabs on the shore' },
   [T.RAILROAD]:  { speed: 0.2, desc: 'Railroad, extremely fast travel' },
+  [T.GRAVE]:     { speed: 1, desc: 'A grave marker' },
 };
 
 const SEASONS = ['Spring', 'Summer', 'Autumn', 'Winter'];
@@ -543,7 +553,8 @@ const EMOJI = {
   [T.IRON_ORE]: '⚙️', [T.GOLD_VEIN]: '✨', [T.GEMS]: '💎',
   [T.BERRY_BUSH]: '🫐', [T.HERB_PATCH]: '🌿', [T.CLAY]: '🏺',
   [T.FISH_SPOT]: '🐟', [T.DEER]: '🦌', [T.CORAL]: '🪸', [T.CRAB]: '🦀',
-  [T.ROAD]: '🛤️', [T.D_ROAD]: '🚧', [T.RAILROAD]: '🚂'
+  [T.ROAD]: '🛤️', [T.D_ROAD]: '🚧', [T.RAILROAD]: '🚂',
+  [T.GRAVE]: '🪦'
 };
 
 const BG_COLORS = {
@@ -558,7 +569,8 @@ const BG_COLORS = {
   [T.IRON_ORE]: '#8a6a4a', [T.GOLD_VEIN]: '#8a7a20', [T.GEMS]: '#5a3a7a',
   [T.BERRY_BUSH]: '#2a4a2a', [T.HERB_PATCH]: '#3a5a2a', [T.CLAY]: '#9a7a5a',
   [T.FISH_SPOT]: '#1a5a8a', [T.DEER]: '#4a6a3a', [T.CORAL]: '#6a3a5a', [T.CRAB]: '#c4965a',
-  [T.ROAD]: '#8a7a5a', [T.D_ROAD]: '#7a6a4a', [T.RAILROAD]: '#5a5a6a'
+  [T.ROAD]: '#8a7a5a', [T.D_ROAD]: '#7a6a4a', [T.RAILROAD]: '#5a5a6a',
+  [T.GRAVE]: '#3a3a3a'
 };
 
 const TILE_NAMES = {
@@ -935,16 +947,18 @@ const mmCtx = mmCanvas.getContext('2d');
 
 // Emoji cache for performance
 const emojiCache = {};
-function getEmojiImg(emoji) {
-  if (emojiCache[emoji]) return emojiCache[emoji];
+function getEmojiImg(emoji, size = 1) {
+  const key = emoji + '|' + size;
+  if (emojiCache[key]) return emojiCache[key];
+  const s = size * TILE;
   const c = document.createElement('canvas');
-  c.width = TILE; c.height = TILE;
+  c.width = s; c.height = s;
   const cx = c.getContext('2d');
-  cx.font = `${TILE - 6}px serif`;
+  cx.font = `${s - 6}px serif`;
   cx.textAlign = 'center';
   cx.textBaseline = 'middle';
-  cx.fillText(emoji, TILE / 2, TILE / 2 + 1);
-  emojiCache[emoji] = c;
+  cx.fillText(emoji, s / 2, s / 2 + 1);
+  emojiCache[key] = c;
   return c;
 }
 
@@ -956,6 +970,7 @@ let tileBufferCamTY = -9999;
 // Extra tiles to render beyond viewport for smooth scrolling
 const TILE_PAD = 2;
 let mmDirty = true; // separate dirty flag for minimap (throttled)
+const pendingTilePatches = []; // individual tile changes to paint without full re-render
 
 // Minimap buffer
 let mmBuffer = null;
@@ -3008,10 +3023,10 @@ function tickSeason() {
 const logEntries = [];
 let logRarity = 1;
 const RARITY_LABELS = { 1: 'All', 2: 'Uncommon+', 3: 'Notable+', 4: 'Rare+', 5: 'Epic' };
-function log(msg, type, rarity, season, cityEmoji) {
+function log(msg, type, rarity, season, cityEmoji, lx, ly) {
   const s = season !== undefined ? season : G.season;
   const ts = SEASON_EMOJIS[s] + (cityEmoji ? ' ' + cityEmoji : '');
-  logEntries.push({ ts, msg, type, rarity: rarity || 1 });
+  logEntries.push({ ts, msg, type, rarity: rarity || 1, lx: lx ?? null, ly: ly ?? null });
   if (logEntries.length > 200) logEntries.shift();
   renderLog();
 }
@@ -3053,23 +3068,31 @@ function renderLog() {
       collapsed.push({ ...e, count: 1 });
     }
   }
-  // Note: innerHTML used with internal game state only (dwarf names), not user input
+  // Note: innerHTML used with internal game state only (dwarf names, integer coords), not user input
   el.innerHTML = collapsed.map(e => {
     const countBadge = e.count > 1 ? `<span class="log-count">\u00d7${e.count}</span>` : '';
-    return `<div class="log-entry t-${e.type}"><span class="ts">${e.ts}</span><span class="msg">${linkifyDwarfNames(e.msg)}${countBadge}</span></div>`;
+    const locAttr = e.lx != null && e.ly != null ? ` data-lx="${e.lx}" data-ly="${e.ly}" style="cursor:pointer"` : '';
+    return `<div class="log-entry t-${e.type}"${locAttr}><span class="ts">${e.ts}</span><span class="msg">${linkifyDwarfNames(e.msg)}${countBadge}</span></div>`;
   }).join('');
   if (atBottom) el.scrollTop = el.scrollHeight;
 }
 
 document.getElementById('log-body').addEventListener('click', (e) => {
-  const target = e.target.closest('.log-dwarf');
-  if (!target) return;
-  const d = G.dwarves.find(dw => dw.id === target.dataset.did);
-  if (!d) return;
-  G.cam.x = d.x * TILE - canvas.width / 2;
-  G.cam.y = d.y * TILE - canvas.height / 2;
-  showDwarfInspector(d);
-  if (isMobile) inspPanel.classList.add('open'); else inspPanel.style.display = 'block';
+  const dwarfEl = e.target.closest('.log-dwarf');
+  if (dwarfEl) {
+    const d = G.dwarves.find(dw => dw.id === dwarfEl.dataset.did);
+    if (!d) return;
+    G.cam.x = d.x * TILE - canvas.width / 2;
+    G.cam.y = d.y * TILE - canvas.height / 2;
+    showDwarfInspector(d);
+    if (isMobile) inspPanel.classList.add('open'); else inspPanel.style.display = 'block';
+    return;
+  }
+  const entry = e.target.closest('.log-entry[data-lx]');
+  if (entry) {
+    G.cam.x = parseInt(entry.dataset.lx) * TILE - canvas.width / 2;
+    G.cam.y = parseInt(entry.dataset.ly) * TILE - canvas.height / 2;
+  }
 });
 document.getElementById('btn-clear-log').onclick = () => { logEntries.length = 0; renderLog(); };
 
@@ -3084,9 +3107,26 @@ window.addEventListener('resize', resize);
 
 let renderFrameCount = 0;
 
+function patchTile(gx, gy) {
+  if (!tileBufferCtx || tileBufferCamTX === -9999) return;
+  const c = gx - tileBufferCamTX;
+  const r = gy - tileBufferCamTY;
+  if (c < 0 || r < 0 || c * TILE >= tileBuffer.width || r * TILE >= tileBuffer.height) return;
+  const t = G.map[gy][wrapX(gx)];
+  const px = c * TILE, py = r * TILE;
+  tileBufferCtx.fillStyle = BG_COLORS[t] || '#042040';
+  tileBufferCtx.fillRect(px, py, TILE, TILE);
+  const em = EMOJI[t];
+  if (em && t !== T.OCEAN) {
+    try { tileBufferCtx.drawImage(getEmojiImg(em), px, py); } catch (e) {}
+  }
+}
+
 function renderTileBuffer(startGX, startGY, endGX, endGY) {
-  const bw = (endGX - startGX + 1) * TILE;
-  const bh = (endGY - startGY) * TILE;
+  const cols = endGX - startGX + 1;
+  const rows = endGY - startGY;
+  const bw = cols * TILE;
+  const bh = rows * TILE;
   if (!tileBuffer || tileBuffer.width !== bw || tileBuffer.height !== bh) {
     tileBuffer = document.createElement('canvas');
     tileBuffer.width = bw; tileBuffer.height = bh;
@@ -3094,17 +3134,66 @@ function renderTileBuffer(startGX, startGY, endGX, endGY) {
   }
   tileBufferCtx.fillStyle = '#042040';
   tileBufferCtx.fillRect(0, 0, bw, bh);
-  for (let gy = startGY; gy < endGY; gy++) {
-    for (let gx = startGX; gx <= endGX; gx++) {
-      const mx = wrapX(gx);
-      const t = G.map[gy][mx];
-      const px = (gx - startGX) * TILE;
-      const py = (gy - startGY) * TILE;
+
+  // Build viewport tile grid (avoids repeated wrapX during probing)
+  const tileGrid = new Array(rows);
+  for (let r = 0; r < rows; r++) {
+    tileGrid[r] = new Uint8Array(cols);
+    const gy = startGY + r;
+    for (let c = 0; c < cols; c++) {
+      tileGrid[r][c] = G.map[gy][wrapX(startGX + c)];
+    }
+  }
+
+  // Covered grid
+  const covered = new Array(rows);
+  for (let r = 0; r < rows; r++) covered[r] = new Uint8Array(cols);
+
+  // Greedy scan (row-major)
+  for (let r = 0; r < rows; r++) {
+    for (let c = 0; c < cols; c++) {
+      if (covered[r][c]) continue;
+      const t = tileGrid[r][c];
+      let bestN = 1;
+
+      if (GROUPABLE.has(t)) {
+        const wy = startGY + r, wx = startGX + c;
+        for (let n = 2; n <= MAX_COVER; n++) {
+          if (wy % n !== 0 || wx % n !== 0) break;
+          if (r + n > rows || c + n > cols) break;
+          let ok = true;
+          // Check new right column (rows r..r+n-2 at col c+n-1)
+          for (let rr = r; rr < r + n - 1; rr++) {
+            if (tileGrid[rr][c + n - 1] !== t || covered[rr][c + n - 1]) { ok = false; break; }
+          }
+          if (!ok) break;
+          // Check new bottom row (cols c..c+n-1 at row r+n-1)
+          for (let cc = c; cc < c + n; cc++) {
+            if (tileGrid[r + n - 1][cc] !== t || covered[r + n - 1][cc]) { ok = false; break; }
+          }
+          if (!ok) break;
+          bestN = n;
+        }
+      }
+
+      // Mark covered
+      for (let rr = r; rr < r + bestN; rr++) {
+        for (let cc = c; cc < c + bestN; cc++) {
+          covered[rr][cc] = 1;
+        }
+      }
+
+      // Draw background
+      const px = c * TILE;
+      const py = r * TILE;
+      const sz = bestN * TILE;
       tileBufferCtx.fillStyle = BG_COLORS[t] || '#042040';
-      tileBufferCtx.fillRect(px, py, TILE, TILE);
+      tileBufferCtx.fillRect(px, py, sz, sz);
+
+      // Draw emoji
       const em = EMOJI[t];
       if (em && t !== T.OCEAN) {
-        try { tileBufferCtx.drawImage(getEmojiImg(em), px, py); } catch (e) {}
+        try { tileBufferCtx.drawImage(getEmojiImg(em, bestN), px, py); } catch (e) {}
       }
     }
   }
@@ -3125,10 +3214,15 @@ function render() {
   const endGY = Math.min(MAP_H, Math.floor((G.cam.y + h) / TILE) + 1 + TILE_PAD);
 
   // Re-render tile buffer only when camera moves to new tile or map changes
-  if (startGX !== tileBufferCamTX || startGY !== tileBufferCamTY || G.mapDirty) {
+  const camMoved = startGX !== tileBufferCamTX || startGY !== tileBufferCamTY;
+  if (camMoved || G.mapDirty) {
     renderTileBuffer(startGX, startGY, endGX, endGY);
+    pendingTilePatches.length = 0;
     if (G.mapDirty) mmDirty = true;
     G.mapDirty = false;
+  } else if (pendingTilePatches.length) {
+    for (const ch of pendingTilePatches) patchTile(ch.x, ch.y);
+    pendingTilePatches.length = 0;
   }
 
   // Blit tile buffer to screen (single drawImage instead of thousands)
@@ -4798,8 +4892,11 @@ function initWorker() {
         G.stats = data.stats;
         // Apply map deltas
         if (data.mapChanges.length) {
-          for (const ch of data.mapChanges) G.map[ch.y][ch.x] = ch.tile;
-          G.mapDirty = true;
+          for (const ch of data.mapChanges) {
+            G.map[ch.y][ch.x] = ch.tile;
+            pendingTilePatches.push(ch);
+          }
+          mmDirty = true;
         }
         // Update city resources
         if (data.cities) {
@@ -4809,7 +4906,7 @@ function initWorker() {
           }
         }
         // Display buffered logs
-        for (const l of data.logs) log(l.msg, l.type, l.rarity, l.season, l.cityEmoji);
+        for (const l of data.logs) log(l.msg, l.type, l.rarity, l.season, l.cityEmoji, l.lx, l.ly);
         // Show buffered toasts
         for (const t of data.toasts) {
           if (t.type === 'year_resolutions') { showYearBanner(t.year, t.resolutions); continue; }
