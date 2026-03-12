@@ -3331,8 +3331,6 @@ function desertEmoji(wx, wy) {
   const h = (tileHash(wx, wy) >>> 0) % 100;
   if (h < 12) return '🌵';
   if (h < 15) return '🪨';
-  if (h < 17) return '🐪';
-  if (h < 18) return '🐍';
   return null;
 }
 
