@@ -294,7 +294,7 @@ app.post('/api/sponsor/webhook', async (c) => {
 
 app.get('/api/sponsor/total', async (c) => {
   const row = await c.env.DB.prepare(
-    "SELECT COALESCE(SUM(amount_cents), 0) as total FROM dwarf_sponsorships WHERE status IN ('active','expired')"
+    "SELECT COALESCE(SUM(amount_cents), 0) as total FROM dwarf_sponsorships WHERE status IN ('pending','active','expired')"
   ).first<{ total: number }>();
   return c.json({ totalCents: row?.total ?? 0 });
 });
@@ -307,8 +307,16 @@ app.get('/api/sponsor/status/:dwarfId', async (c) => {
 });
 
 // Success page for sponsorship checkout completion
-app.get('/success', (c) => {
+app.get('/success', async (c) => {
   const checkoutId = c.req.query('checkout_id') || '';
+  // Auto-activate: user landed here = Polar charged them
+  if (checkoutId) {
+    try {
+      await c.env.DB.prepare(
+        "UPDATE dwarf_sponsorships SET status='active', activated_at=datetime('now') WHERE checkout_id=? AND status='pending'"
+      ).bind(checkoutId).run();
+    } catch (_) { /* best-effort */ }
+  }
   return c.html(`<!DOCTYPE html>
 <html lang="en" data-theme="grunge">
 <head>

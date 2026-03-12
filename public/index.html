@@ -428,7 +428,6 @@ const CITIES = [
   { id: 'cairo', name: 'Cairo', lon: 31, lat: 30, emoji: '🏛️', culture: 'egyptian' },
   { id: 'sydney', name: 'Sydney', lon: 151, lat: -34, emoji: '🦘', culture: 'australian' },
   { id: 'rio', name: 'Rio', lon: -43, lat: -23, emoji: '🎭', culture: 'brazilian' },
-  { id: 'moscow', name: 'Moscow', lon: 38, lat: 56, emoji: '⛪', culture: 'russian' },
   { id: 'beijing', name: 'Beijing', lon: 116, lat: 40, emoji: '🏯', culture: 'chinese' },
   { id: 'delhi', name: 'Delhi', lon: 77, lat: 29, emoji: '🕌', culture: 'indian' },
   { id: 'nairobi', name: 'Nairobi', lon: 37, lat: -1, emoji: '🦁', culture: 'kenyan' },
@@ -450,6 +449,26 @@ const CITIES = [
   { id: 'honolulu', name: 'Honolulu', lon: -158, lat: 21, emoji: '🌺', culture: 'hawaiian' },
   { id: 'anchorage', name: 'Anchorage', lon: -150, lat: 61, emoji: '🐻', culture: 'alaskan' },
   { id: 'krakow', name: 'Krakow', lon: 20, lat: 50, emoji: '🐉', culture: 'polish' },
+  { id: 'madrid', name: 'Madrid', lon: -4, lat: 40, emoji: '🐂', culture: 'spanish' },
+  { id: 'lisbon', name: 'Lisbon', lon: -9, lat: 39, emoji: '⛵', culture: 'portuguese' },
+  { id: 'amsterdam', name: 'Amsterdam', lon: 5, lat: 52, emoji: '🌷', culture: 'dutch' },
+  { id: 'vienna', name: 'Vienna', lon: 16, lat: 48, emoji: '🎻', culture: 'austrian' },
+  { id: 'athens', name: 'Athens', lon: 24, lat: 38, emoji: '🏛️', culture: 'greek' },
+  { id: 'stockholm', name: 'Stockholm', lon: 18, lat: 59, emoji: '👑', culture: 'swedish' },
+  { id: 'oslo', name: 'Oslo', lon: 11, lat: 60, emoji: '🛡️', culture: 'norwegian' },
+  { id: 'helsinki', name: 'Helsinki', lon: 25, lat: 60, emoji: '🧖', culture: 'finnish' },
+  { id: 'prague', name: 'Prague', lon: 14, lat: 50, emoji: '🏰', culture: 'czech' },
+  { id: 'kyiv', name: 'Kyiv', lon: 31, lat: 50, emoji: '🌻', culture: 'ukrainian' },
+  { id: 'tehran', name: 'Tehran', lon: 51, lat: 36, emoji: '🕌', culture: 'iranian' },
+  { id: 'hanoi', name: 'Hanoi', lon: 106, lat: 21, emoji: '🍜', culture: 'vietnamese' },
+  { id: 'manila', name: 'Manila', lon: 121, lat: 15, emoji: '🌺', culture: 'filipino' },
+  { id: 'jakarta', name: 'Jakarta', lon: 107, lat: -6, emoji: '🌴', culture: 'indonesian' },
+  { id: 'addis-ababa', name: 'Addis Ababa', lon: 38, lat: 9, emoji: '☕', culture: 'ethiopian' },
+  { id: 'bogota', name: 'Bogota', lon: -74, lat: 5, emoji: '🦜', culture: 'colombian' },
+  { id: 'santiago', name: 'Santiago', lon: -71, lat: -33, emoji: '🏔️', culture: 'chilean' },
+  { id: 'ottawa', name: 'Ottawa', lon: -76, lat: 45, emoji: '🍁', culture: 'canadian' },
+  { id: 'wellington', name: 'Wellington', lon: 175, lat: -41, emoji: '🥝', culture: 'kiwi' },
+  { id: 'rabat', name: 'Rabat', lon: -7, lat: 34, emoji: '🫖', culture: 'moroccan' },
 ];
 
 const CULTURES = {
@@ -460,7 +479,6 @@ const CULTURES = {
   egyptian:    { country: 'Egypt',        continent: 'Africa',        firstNames: ['Ahmed','Fatima','Omar','Nour','Youssef','Mariam','Ali','Salma'], lastNames: ['Hassan','Ibrahim','Mohamed','Mahmoud','Khalil','Mostafa'], traits: ['spiritual','resilient'] },
   australian:  { country: 'Australia',    continent: 'Oceania',       firstNames: ['Jack','Mia','Noah','Chloe','Cooper','Ruby','Lachlan','Grace'], lastNames: ['Campbell','Kelly','Murray','Mitchell','Robinson','Thompson'], traits: ['adventurous','easygoing'] },
   brazilian:   { country: 'Brazil',       continent: 'South America', firstNames: ['Lucas','Maria','Pedro','Ana','Gabriel','Julia','Mateus','Beatriz'], lastNames: ['Silva','Santos','Oliveira','Souza','Lima','Costa'], traits: ['joyful','creative'] },
-  russian:     { country: 'Russia',       continent: 'Europe',        firstNames: ['Ivan','Anya','Dmitri','Olga','Alexei','Natasha','Nikolai','Katya'], lastNames: ['Ivanov','Petrov','Volkov','Sokolov','Kuznetsov','Popov'], traits: ['enduring','cunning'] },
   chinese:     { country: 'China',        continent: 'Asia',          firstNames: ['Wei','Mei','Jun','Xia','Hao','Ling','Chen','Yan'], lastNames: ['Wang','Li','Zhang','Liu','Chen','Yang'], traits: ['scholarly','persistent'] },
   indian:      { country: 'India',        continent: 'Asia',          firstNames: ['Arjun','Priya','Rohan','Ananya','Vikram','Diya','Aditya','Ishaan'], lastNames: ['Sharma','Patel','Singh','Kumar','Gupta','Reddy'], traits: ['spiritual','resourceful'] },
   kenyan:      { country: 'Kenya',        continent: 'Africa',        firstNames: ['Jabari','Amara','Kiano','Zuri','Otieno','Wanjiku','Mwangi','Akinyi'], lastNames: ['Ochieng','Kamau','Muthoni','Njoroge','Wambui','Kimani'], traits: ['communal','enduring'] },
@@ -480,6 +498,26 @@ const CULTURES = {
   hawaiian:    { country: 'USA',          continent: 'North America', firstNames: ['Kai','Leilani','Makoa','Mahina','Keanu','Nalani','Koa','Alani'], lastNames: ['Kamaka','Nakamura','Kalani','Kealoha','Palakiko','Akana'], traits: ['harmonious','spiritual'] },
   alaskan:     { country: 'USA',          continent: 'North America', firstNames: ['Denali','Siku','Kodiak','Nuna','Sitka','Tundra','Kenai','Aurora'], lastNames: ['Blackwood','Whitebear','Ironhand','Frostborn','Stonecreek','Ashford'], traits: ['hardy','resourceful'] },
   polish:      { country: 'Poland',      continent: 'Europe',        firstNames: ['Jan','Zofia','Krzysztof','Anna','Stanislaw','Katarzyna','Wojciech','Magda'], lastNames: ['Kowalski','Nowak','Wisniewski','Kaminski','Lewandowski','Zielinski'], traits: ['resilient','ingenious'] },
+  spanish:     { country: 'Spain',       continent: 'Europe',        firstNames: ['Hugo','Lucia','Martin','Sofia','Pablo','Maria','Alvaro','Carmen'], lastNames: ['Garcia','Martinez','Lopez','Sanchez','Gonzalez','Fernandez'], traits: ['passionate','proud'] },
+  portuguese:  { country: 'Portugal',    continent: 'Europe',        firstNames: ['Tiago','Leonor','Rodrigo','Beatriz','Diogo','Ines','Afonso','Matilde'], lastNames: ['Silva','Santos','Ferreira','Pereira','Oliveira','Costa'], traits: ['adventurous','melancholic'] },
+  dutch:       { country: 'Netherlands', continent: 'Europe',        firstNames: ['Daan','Emma','Sem','Julia','Lucas','Sophie','Liam','Tess'], lastNames: ['De Vries','Van Dijk','Bakker','Jansen','Visser','Smit'], traits: ['pragmatic','tolerant'] },
+  austrian:    { country: 'Austria',     continent: 'Europe',        firstNames: ['Maximilian','Anna','Felix','Emilia','Paul','Valentina','David','Lena'], lastNames: ['Gruber','Huber','Bauer','Wagner','Steiner','Berger'], traits: ['cultured','meticulous'] },
+  greek:       { country: 'Greece',      continent: 'Europe',        firstNames: ['Georgios','Maria','Dimitris','Eleni','Nikos','Sofia','Kostas','Katerina'], lastNames: ['Papadopoulos','Georgiou','Nikolaou','Vasileiou','Panagiotopoulos','Oikonomou'], traits: ['philosophical','proud'] },
+  swedish:     { country: 'Sweden',      continent: 'Europe',        firstNames: ['Oscar','Astrid','William','Ella','Hugo','Alma','Liam','Ebba'], lastNames: ['Andersson','Johansson','Karlsson','Nilsson','Eriksson','Larsson'], traits: ['egalitarian','innovative'] },
+  norwegian:   { country: 'Norway',      continent: 'Europe',        firstNames: ['Aksel','Nora','Emil','Emma','Jakob','Olivia','Magnus','Sofie'], lastNames: ['Hansen','Johansen','Olsen','Larsen','Andersen','Pedersen'], traits: ['hardy','adventurous'] },
+  finnish:     { country: 'Finland',     continent: 'Europe',        firstNames: ['Onni','Aino','Eeli','Aada','Vaino','Helmi','Leo','Eevi'], lastNames: ['Korhonen','Virtanen','Makinen','Nieminen','Hakkinen','Laine'], traits: ['resilient','stoic'] },
+  czech:       { country: 'Czech Republic', continent: 'Europe',     firstNames: ['Jakub','Eliska','Jan','Tereza','Tomas','Adela','Matej','Anna'], lastNames: ['Novak','Svoboda','Novotny','Dvorak','Cerny','Prochazka'], traits: ['inventive','sardonic'] },
+  ukrainian:   { country: 'Ukraine',     continent: 'Europe',        firstNames: ['Oleksandr','Anastasia','Dmytro','Daryna','Artem','Sofiya','Bohdan','Veronika'], lastNames: ['Shevchenko','Bondarenko','Kovalenko','Tkachenko','Melnyk','Boyko'], traits: ['resilient','defiant'] },
+  iranian:     { country: 'Iran',        continent: 'Asia',          firstNames: ['Dariush','Shirin','Amir','Nazanin','Reza','Fatemeh','Ali','Sara'], lastNames: ['Hosseini','Rahmani','Mohammadi','Ahmadi','Karimi','Hashemi'], traits: ['poetic','proud'] },
+  vietnamese:  { country: 'Vietnam',     continent: 'Asia',          firstNames: ['Minh','Linh','Duc','Mai','Tuan','Lan','Hieu','Anh'], lastNames: ['Nguyen','Tran','Le','Pham','Hoang','Vo'], traits: ['industrious','resilient'] },
+  filipino:    { country: 'Philippines', continent: 'Asia',          firstNames: ['Jose','Maria','Juan','Ana','Miguel','Sofia','Rafael','Isabella'], lastNames: ['Santos','Reyes','Cruz','Ramos','Garcia','Torres'], traits: ['joyful','communal'] },
+  indonesian:  { country: 'Indonesia',   continent: 'Asia',          firstNames: ['Budi','Siti','Agus','Dewi','Eko','Putri','Adi','Ratna'], lastNames: ['Wijaya','Sari','Putra','Kusuma','Santoso','Pratama'], traits: ['harmonious','resourceful'] },
+  ethiopian:   { country: 'Ethiopia',    continent: 'Africa',        firstNames: ['Abebe','Tigist','Dawit','Meron','Yonas','Hiwot','Biniam','Seble'], lastNames: ['Tesfaye','Bekele','Kebede','Haile','Tadesse','Gebre'], traits: ['spiritual','enduring'] },
+  colombian:   { country: 'Colombia',    continent: 'South America', firstNames: ['Santiago','Valentina','Samuel','Isabella','Matias','Gabriela','Daniel','Mariana'], lastNames: ['Rodriguez','Martinez','Garcia','Lopez','Hernandez','Gonzalez'], traits: ['joyful','resourceful'] },
+  chilean:     { country: 'Chile',       continent: 'South America', firstNames: ['Agustin','Martina','Benjamin','Isidora','Vicente','Florencia','Matias','Emilia'], lastNames: ['Gonzalez','Munoz','Rojas','Diaz','Perez','Soto'], traits: ['resilient','proud'] },
+  canadian:    { country: 'Canada',      continent: 'North America', firstNames: ['Liam','Olivia','Noah','Emma','Ethan','Ava','Lucas','Charlotte'], lastNames: ['Tremblay','Roy','Gagnon','Bouchard','Cote','Belanger'], traits: ['polite','hardy'] },
+  kiwi:        { country: 'New Zealand', continent: 'Oceania',       firstNames: ['Jack','Isla','Oliver','Amelia','Leo','Willow','Finn','Maia'], lastNames: ['Smith','Williams','Brown','Wilson','Taylor','Anderson'], traits: ['adventurous','easygoing'] },
+  moroccan:    { country: 'Morocco',     continent: 'Africa',        firstNames: ['Youssef','Fatima','Omar','Amina','Amine','Khadija','Adam','Maryam'], lastNames: ['El-Idrissi','Benali','Alaoui','Mansouri','Berrada','Fassi'], traits: ['hospitable','resilient'] },
 };
 
 const DWARF_NAMES = [
@@ -508,12 +546,12 @@ function defaultRes() {
 function biomeStartRes(city) {
   const absLat = Math.abs(city.lat);
   // Desert — lots of stone, some gold from sand
-  if (city.culture === 'egyptian' || city.culture === 'emirati') return { stone: 120, wood: 10, food: 40, iron: 5, gold: 3, cloth: 5, ale: 0, herbs: 0, beds: 0, tables: 0 };
+  if (city.culture === 'egyptian' || city.culture === 'emirati' || city.culture === 'iranian' || city.culture === 'moroccan') return { stone: 120, wood: 10, food: 40, iron: 5, gold: 3, cloth: 5, ale: 0, herbs: 0, beds: 0, tables: 0 };
   // Tropical — abundant food and wood
-  if (city.culture === 'kenyan' || city.culture === 'thai' || city.culture === 'singaporean' || city.culture === 'nigerian' || city.culture === 'brazilian')
+  if (city.culture === 'kenyan' || city.culture === 'thai' || city.culture === 'singaporean' || city.culture === 'nigerian' || city.culture === 'brazilian' || city.culture === 'vietnamese' || city.culture === 'filipino' || city.culture === 'indonesian' || city.culture === 'ethiopian' || city.culture === 'colombian')
     return { stone: 20, wood: 80, food: 100, iron: 0, gold: 0, cloth: 5, ale: 0, herbs: 15, beds: 0, tables: 0 };
   // Arctic — sparse but mineral-rich
-  if (city.culture === 'icelandic' || city.culture === 'alaskan') return { stone: 60, wood: 15, food: 30, iron: 15, gold: 2, cloth: 5, ale: 5, herbs: 0, beds: 0, tables: 0 };
+  if (city.culture === 'icelandic' || city.culture === 'alaskan' || city.culture === 'norwegian' || city.culture === 'finnish') return { stone: 60, wood: 15, food: 30, iron: 15, gold: 2, cloth: 5, ale: 5, herbs: 0, beds: 0, tables: 0 };
   // Temperate (default) — balanced
   return { stone: 40, wood: 50, food: 70, iron: 5, gold: 0, cloth: 5, ale: 5, herbs: 5, beds: 0, tables: 0 };
 }
@@ -1192,6 +1230,16 @@ async function requestBackstory(d) {
 
 // ---- Dwarf AI (same logic, wrapping-aware) ----
 function tickDwarf(d) {
+  // Safety net: rescue dwarves stranded on non-walkable tiles (ocean bug)
+  if (d.state !== 'sailing' && !isWalkable(d.x, d.y)) {
+    const city = cityOf(d);
+    if (city.mx !== undefined) {
+      d.x = city.mx; d.y = city.my;
+      d.state = 'idle'; d.target = null; d.path = [];
+      log(`${d.name} was rescued from the sea!`, 'system');
+    }
+  }
+
   d.hunger = Math.max(0, d.hunger - 0.03);
   d.energy = Math.max(0, d.energy - 0.02);
   d.happiness = Math.max(0, Math.min(100, d.happiness - 0.005));
@@ -1852,17 +1900,20 @@ function aiSail(d) {
       }
       if (disembarkX !== null) {
         d.x = disembarkX; d.y = disembarkY;
-        // Transfer cargo to city
-        for (const [k, v] of Object.entries(ship.cargo)) {
-          if (destCity.res && destCity.res[k] !== undefined) destCity.res[k] += v;
-        }
-        const cargoAmt = shipCargo(ship);
-        ship.cargo = {}; ship.cargoTotal = 0;
-        d.cityId = destCity.id; // Transfer allegiance
-        ship.captainId = null;
-        log(`${d.name} ⚓ arrived at ${destCity.name}${cargoAmt > 0 ? ` with ${cargoAmt} goods` : ''}!`, 'system');
-        addEvent(d, 'sail', `Arrived at ${destCity.name}`);
+      } else if (destCity.mx !== undefined) {
+        // Fallback: teleport to city center if no adjacent walkable tile
+        d.x = destCity.mx; d.y = destCity.my;
       }
+      // Transfer cargo to city
+      for (const [k, v] of Object.entries(ship.cargo)) {
+        if (destCity.res && destCity.res[k] !== undefined) destCity.res[k] += v;
+      }
+      const cargoAmt = shipCargo(ship);
+      ship.cargo = {}; ship.cargoTotal = 0;
+      d.cityId = destCity.id; // Transfer allegiance
+      ship.captainId = null;
+      log(`${d.name} ⚓ arrived at ${destCity.name}${cargoAmt > 0 ? ` with ${cargoAmt} goods` : ''}!`, 'system');
+      addEvent(d, 'sail', `Arrived at ${destCity.name}`);
     }
     d.state = 'idle'; d.target = null;
   } else if (ship.state === 'docked' && !ship.target) {
