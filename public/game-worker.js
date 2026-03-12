@@ -1147,7 +1147,7 @@ function shipNameForCity(cityId) {
   return names[Math.floor(Math.random() * names.length)];
 }
 function createShip(x, y, captainId, cityId) {
-  return { id:'s_'+Math.random().toString(36).slice(2,8), name:shipNameForCity(cityId), x, y, captainId, cityId, cargo:{}, cargoTotal:0, state:'docked', target:null, path:[] };
+  return { id:'s_'+Math.random().toString(36).slice(2,8), name:shipNameForCity(cityId), x, y, captainId, cityId, cargo:{}, cargoTotal:0, state:'docked', target:null, path:[], waterX:null, waterY:null };
 }
 function shipCargo(ship) { return Object.values(ship.cargo).reduce((s,v) => s+v, 0); }
 function tickShip(ship) {
@@ -1159,10 +1159,36 @@ function tickShip(ship) {
       ship.cargo.food = (ship.cargo.food||0)+2;
       ship.cargoTotal = shipCargo(ship);
     }
-    if (ship.path.length === 0) { ship.state = 'docked'; ship.target = null; }
+    if (ship.path.length === 0) { ship.state = 'docked'; beachShip(ship); }
   }
 }
 function tickShips() { for (const ship of G.ships) tickShip(ship); }
+function beachShip(ship) {
+  const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
+  for (const [dx,dy] of dirs) {
+    const nx = wrapX(ship.x+dx), ny = ship.y+dy;
+    if (ny >= 0 && ny < MAP_H && isWalkable(nx, ny)) {
+      ship.waterX = ship.x; ship.waterY = ship.y;
+      ship.x = nx; ship.y = ny;
+      return;
+    }
+  }
+}
+function launchShip(ship) {
+  if (ship.waterX !== null && ship.waterY !== null) {
+    ship.x = ship.waterX; ship.y = ship.waterY;
+    ship.waterX = null; ship.waterY = null;
+    return;
+  }
+  const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
+  for (const [dx,dy] of dirs) {
+    const nx = wrapX(ship.x+dx), ny = ship.y+dy;
+    if (ny >= 0 && ny < MAP_H && isWater(nx, ny)) {
+      ship.x = nx; ship.y = ny;
+      return;
+    }
+  }
+}
 
 // ---- Road connectivity graph ----
 function rebuildRoadGraph() {
@@ -1276,12 +1302,14 @@ function tryBuildShip(city) {
   r.wood -= SHIP_COST.wood; r.cloth -= SHIP_COST.cloth; r.iron -= SHIP_COST.iron;
   const ship = createShip(launchX, launchY, null, city.id);
   G.ships.push(ship);
+  beachShip(ship);
   log(`${city.name} ⛵ built a ship!`, 'city', 5);
   return ship;
 }
 
 function boardShip(d, ship, destCity) {
   if (!destCity || destCity.mx === undefined) return false;
+  launchShip(ship);
   let destWX = null, destWY = null;
   for (let dy = -3; dy <= 3 && destWX === null; dy++)
     for (let dx = -3; dx <= 3 && destWX === null; dx++) {
@@ -1310,13 +1338,6 @@ function aiSail(d) {
   if (ship.state === 'docked' && ship.target) {
     const destCity = cityById(ship.target.cityId);
     if (destCity) {
-      let disembarkX = null, disembarkY = null;
-      for (const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]]) {
-        const nx = wrapX(ship.x+dx), ny = ship.y+dy;
-        if (ny >= 0 && ny < MAP_H && isWalkable(nx, ny)) { disembarkX = nx; disembarkY = ny; break; }
-      }
-      if (disembarkX !== null) { d.x = disembarkX; d.y = disembarkY; }
-      else if (destCity.mx !== undefined) { d.x = destCity.mx; d.y = destCity.my; }
       for (const [k,v] of Object.entries(ship.cargo)) {
         if (destCity.res && destCity.res[k] !== undefined) destCity.res[k] += v;
       }
@@ -1326,7 +1347,7 @@ function aiSail(d) {
       log(`${d.name} ⚓ arrived at ${destCity.name}${cargoAmt > 0 ? ` with ${cargoAmt} goods` : ''}!`, 'system', 3);
       addEvent(d, 'sail', `Arrived at ${destCity.name}`);
     }
-    d.state = 'idle'; d.target = null;
+    ship.target = null; d.state = 'idle'; d.target = null;
   } else if (ship.state === 'docked' && !ship.target) {
     d.state = 'idle'; d.target = null; ship.captainId = null;
   }
@@ -1760,7 +1781,6 @@ function tickSeason() {
     }
     const name = SEASONS[G.season];
     log(`🌍 ${name} of Year ${G.year}`, 'system', 3);
-    pendingToasts.push({type:'info', title:name+', Year '+G.year, message:'The seasons turn across Dwarf Land...'});
 
     if (G.season === 0 || G.season === 1) {
       for (const city of CITIES) {
