@@ -1433,7 +1433,11 @@ function spawnDwarfAtCity(city) {
   let x, y, tries = 0;
   do { x = wrapX(hx + Math.floor(Math.random() * 6 - 3)); y = hy + Math.floor(Math.random() * 4 - 2); tries++; }
   while (!isWalkable(x, y) && tries < 80);
-  if (!isWalkable(x, y)) return;
+  if (!isWalkable(x, y)) {
+    const land = findNearbyLand(hx, hy);
+    if (!land) return;
+    x = land[0]; y = land[1];
+  }
   const d = createDwarf(x, y, city.id);
   G.dwarves.push(d);
   log(`${d.name} has arrived at ${city.name}!`, 'system');
@@ -1470,14 +1474,28 @@ async function requestBackstory(d) {
 }
 
 // ---- Dwarf AI (same logic, wrapping-aware) ----
+function findNearbyLand(cx, cy) {
+  if (isWalkable(cx, cy)) return [cx, cy];
+  for (let r = 1; r <= 15; r++) {
+    for (let dy = -r; dy <= r; dy++) for (let dx = -r; dx <= r; dx++) {
+      if (Math.abs(dx) !== r && Math.abs(dy) !== r) continue;
+      const nx = wrapX(cx + dx), ny = cy + dy;
+      if (ny >= 0 && ny < MAP_H && isWalkable(nx, ny)) return [nx, ny];
+    }
+  }
+  return null;
+}
+
 function tickDwarf(d) {
-  // Safety net: rescue dwarves stranded on non-walkable tiles (ocean bug)
   if (d.state !== 'sailing' && !isWalkable(d.x, d.y)) {
     const city = cityOf(d);
     if (city.mx !== undefined) {
-      d.x = city.mx; d.y = city.my;
-      d.state = 'idle'; d.target = null; d.path = [];
-      log(`${d.name} was rescued from the sea!`, 'system');
+      const land = findNearbyLand(city.mx, city.my) || findNearbyLand(d.x, d.y);
+      if (land) {
+        d.x = land[0]; d.y = land[1];
+        d.state = 'idle'; d.target = null; d.path = [];
+        log(`${d.name} was rescued from the sea!`, 'system');
+      }
     }
   }
 
@@ -3747,6 +3765,11 @@ async function restoreState() {
         inventory: sd.inventory || [],
       });
       d.target = null; d.path = [];
+      if (!isWalkable(d.x, d.y)) {
+        const city = CITIES.find(c => c.id === d.cityId);
+        const land = city?.mx !== undefined ? findNearbyLand(city.mx, city.my) : findNearbyLand(d.x, d.y);
+        if (land) { d.x = land[0]; d.y = land[1]; d.state = 'idle'; }
+      }
       G.dwarves.push(d);
       G.usedNames.add(sd.name.split(' ')[0]);
     }
