@@ -1198,6 +1198,88 @@ function launchShip(ship) {
   }
 }
 
+// ---- Auto-connect cities with roads ----
+function autoConnectCities() {
+  // Each season, try to connect one unconnected city pair with a gravel road
+  const placed = CITIES.filter(c => c.mx !== undefined && c.res);
+  if (placed.length < 2) return;
+
+  // Find closest unconnected pair
+  let bestPair = null, bestDist = Infinity;
+  for (let i = 0; i < placed.length; i++) {
+    for (let j = i + 1; j < placed.length; j++) {
+      const a = placed[i], b = placed[j];
+      const pairKey = [a.id, b.id].sort().join('-');
+      if (G.roadGraph?.[pairKey]?.gravel) continue; // already connected
+      const dx = Math.min(Math.abs(a.mx - b.mx), MAP_W - Math.abs(a.mx - b.mx));
+      const dy = Math.abs(a.my - b.my);
+      const dist = dx + dy;
+      if (dist < bestDist && dist < 80) { bestDist = dist; bestPair = [a, b]; }
+    }
+  }
+  if (!bestPair) return;
+  const [cityA, cityB] = bestPair;
+
+  // A* pathfind on walkable terrain, preferring existing roads
+  const roadable = new Set([T.PLAINS,T.FOREST,T.TAIGA,T.DESERT,T.TUNDRA,T.HILL,T.BEACH,
+    T.ROAD,T.ASPHALT,T.RAILROAD,T.CITY,T.FACTORY,T.FLOOR,T.FARM,T.D_ROAD]);
+  const goal = `${cityB.mx},${cityB.my}`;
+  const openSet = [{x:cityA.mx, y:cityA.my, g:0, f:0}];
+  const gScore = new Map(); gScore.set(`${cityA.mx},${cityA.my}`, 0);
+  const cameFrom = new Map();
+  const heuristic = (x, y) => {
+    const dx = Math.min(Math.abs(x - cityB.mx), MAP_W - Math.abs(x - cityB.mx));
+    return dx + Math.abs(y - cityB.my);
+  };
+  openSet[0].f = heuristic(cityA.mx, cityA.my);
+  let found = false;
+  while (openSet.length > 0) {
+    openSet.sort((a, b) => a.f - b.f);
+    const cur = openSet.shift();
+    const curKey = `${cur.x},${cur.y}`;
+    if (curKey === goal) { found = true; break; }
+    if (gScore.size > 3000) break;
+    for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+      const nx = wrapX(cur.x + dx), ny = cur.y + dy;
+      if (ny < 0 || ny >= MAP_H) continue;
+      const t = G.map[ny][nx];
+      if (!roadable.has(t)) continue;
+      const moveCost = (t === T.ROAD || t === T.ASPHALT || t === T.RAILROAD || t === T.CITY || t === T.FACTORY) ? 0.5 : 1;
+      const tentG = cur.g + moveCost;
+      const nKey = `${nx},${ny}`;
+      if (tentG < (gScore.get(nKey) ?? Infinity)) {
+        gScore.set(nKey, tentG);
+        cameFrom.set(nKey, curKey);
+        openSet.push({x:nx, y:ny, g:tentG, f:tentG + heuristic(nx, ny)});
+      }
+    }
+  }
+  if (!found) return;
+
+  // Reconstruct path and place roads
+  const path = [];
+  let k = goal;
+  const startKey = `${cityA.mx},${cityA.my}`;
+  while (k && k !== startKey) {
+    const [px, py] = k.split(',').map(Number);
+    path.unshift([px, py]);
+    k = cameFrom.get(k);
+  }
+
+  let roadsBuilt = 0;
+  for (const [rx, ry] of path) {
+    const t = G.map[ry][rx];
+    if (t !== T.ROAD && t !== T.ASPHALT && t !== T.RAILROAD && t !== T.CITY && t !== T.FACTORY && t !== T.FLOOR) {
+      mapSet(rx, ry, T.ROAD);
+      roadsBuilt++;
+    }
+  }
+  if (roadsBuilt > 0) {
+    G.roadGraphDirty = true;
+    log(`🛤️ Road built connecting ${cityA.name} ↔ ${cityB.name} (${roadsBuilt} tiles)`, 'city', 4);
+  }
+}
+
 // ---- Road connectivity graph ----
 function rebuildRoadGraph() {
   G.roadGraph = {};
@@ -1940,6 +2022,9 @@ function tickSeason() {
         }
       }
     }
+
+    // Auto-build roads between nearby cities
+    autoConnectCities();
 
     // Rebuild road graph and spawn vehicles
     if (!G.roadGraph || G.roadGraphDirty) rebuildRoadGraph();

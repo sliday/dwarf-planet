@@ -3517,9 +3517,9 @@ function render() {
     for (let gx = startGX; gx < endGX; gx++) {
       const wx = wrapX(gx);
       if (!ROAD_TILES.has(G.map[gy][wx])) continue;
-      const wave = Math.sin((wx + gy) * 0.5 + now * 2.0) * 0.5 + 0.5;
-      if (wave < 0.3) continue;
-      const alpha = (wave - 0.3) * 0.12;
+      const wave = Math.sin((wx + gy) * 1.2 + now * 3.0) * 0.5 + 0.5;
+      if (wave < 0.2) continue;
+      const alpha = (wave - 0.2) * 0.25;
       const px = gx * TILE - G.cam.x;
       const py = gy * TILE - G.cam.y;
       if (px < -TILE || py < -TILE || px > w + TILE || py > h + TILE) continue;
@@ -3566,6 +3566,7 @@ function render() {
   }
 
   // Draw dwarves
+  const VEHICLE_EMOJIS = { cart:'\uD83D\uDC34', car:'\uD83D\uDE97', train:'\uD83D\uDE82' };
   for (const d of G.dwarves) {
     // Check both regular and wrapped positions
     for (const offset of [0, MAP_W, -MAP_W]) {
@@ -3585,7 +3586,7 @@ function render() {
                      d.state === 'eating' || d.state === 'going_eat' ? '🍖' :
                      d.state === 'building' ? '🔨' : d.state === 'farming' ? '🌱' :
                      d.state === 'hauling' ? '📦' : d.state === 'gathering' ? '🧺' :
-                     d.state === 'sailing' ? '⛵' : d.state === 'driving' ? '🚗' : '🧔';
+                     d.state === 'sailing' ? '⛵' : d.state === 'driving' ? (VEHICLE_EMOJIS[G.vehicles.find(v => v.driverId === d.id)?.type] || '🚗') : '🧔';
       try { ctx.drawImage(getEmojiImg(dEmoji), px, py); } catch (e) {}
       if (d.sponsored) {
         try { ctx.drawImage(getEmojiImg('⭐'), px + TILE / 2, py - 2); } catch (e) {}
@@ -3623,7 +3624,6 @@ function render() {
   }
 
   // Draw vehicles
-  const VEHICLE_EMOJIS = { cart:'\uD83D\uDC34', car:'\uD83D\uDE97', train:'\uD83D\uDE82' };
   for (const v of G.vehicles) {
     for (const offset of [0, MAP_W, -MAP_W]) {
       const px = (v.x + offset) * TILE - G.cam.x;
