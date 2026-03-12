@@ -12,6 +12,43 @@
   html, body { height: 100%; overflow: hidden; background: #1d2021; color: #ebdbb2; }
   body { font-family: 'Courier New', monospace; font-weight: 500; }
 
+  #loader {
+    position: fixed; inset: 0; z-index: 9999;
+    background: #1d2021;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    transition: opacity 0.6s ease;
+  }
+  #loader.fade-out { opacity: 0; pointer-events: none; }
+  #loader .loader-emoji { font-size: 64px; animation: loader-bounce 1.2s ease-in-out infinite; }
+  #loader .loader-title {
+    font-family: 'Courier New', monospace; font-size: 28px; font-weight: bold;
+    color: #fbf1c7; margin-top: 16px; letter-spacing: 3px; text-transform: uppercase;
+  }
+  #loader .loader-bar-wrap {
+    margin-top: 24px; width: 240px; height: 6px;
+    background: #3c3836; border-radius: 3px; overflow: hidden;
+    border: 1px solid #504945;
+  }
+  #loader .loader-bar {
+    height: 100%; width: 0%; background: #b8bb26; border-radius: 3px;
+    animation: loader-fill 4s ease-out forwards;
+  }
+  #loader .loader-hint {
+    margin-top: 14px; font-size: 13px; color: #928374;
+    font-family: 'Courier New', monospace; font-style: italic;
+  }
+  @keyframes loader-bounce {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-12px); }
+  }
+  @keyframes loader-fill {
+    0% { width: 0%; }
+    30% { width: 45%; }
+    60% { width: 70%; }
+    90% { width: 88%; }
+    100% { width: 95%; }
+  }
+
   #game-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; }
 
   .hud-top {
@@ -144,6 +181,12 @@
 </style>
 </head>
 <body>
+<div id="loader">
+  <div class="loader-emoji">🧔</div>
+  <div class="loader-title">Dwarf Land</div>
+  <div class="loader-bar-wrap"><div class="loader-bar"></div></div>
+  <div class="loader-hint">Generating world...</div>
+</div>
 
 <canvas id="game-canvas"></canvas>
 
@@ -2033,6 +2076,44 @@ function aiSeekCraft(d) {
   }
 }
 
+const craftQueue = [];
+let craftDraining = false;
+async function drainCraftQueue() {
+  if (craftDraining || craftQueue.length === 0) return;
+  craftDraining = true;
+  while (craftQueue.length > 0) {
+    const { d, item1, item2 } = craftQueue.shift();
+    try {
+      const resp = await fetch(`${AI.apiBase}/api/craft`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ item1, item2 }),
+      });
+      const res = await resp.json();
+      if (res.ok && res.result) {
+        d.inventory.splice(0, 2);
+        addInventoryItem(d, res.result);
+        log(`${d.name} \u2728 combined ${item1.emoji}${item1.name} + ${item2.emoji}${item2.name} = ${res.result.emoji}${res.result.name}!`, 'craft');
+        addEvent(d, 'craft', `Combined ${item1.name} + ${item2.name} = ${res.result.name}`);
+        d.happiness = Math.min(100, d.happiness + 5);
+        const city = cityOf(d);
+        if (city) { if (!city.discoveries) city.discoveries = new Set(); city.discoveries.add(res.result.name); }
+      }
+    } catch (e) {
+      d.inventory.splice(0, 2);
+      const emojis = ['\u2728', '\uD83D\uDD2E', '\u26A1', '\uD83C\uDF00', '\uD83D\uDCAB'];
+      const name = (item1.name.slice(0, 3) + item2.name.slice(-3)).slice(0, 20);
+      const fallback = { emoji: emojis[Math.floor(Math.random() * emojis.length)], name };
+      addInventoryItem(d, fallback);
+      log(`${d.name} \u2728 crafted ${fallback.emoji}${fallback.name}`, 'craft');
+      addEvent(d, 'craft', `Crafted ${fallback.name}`);
+    }
+    await new Promise(r => setTimeout(r, 1500 + Math.random() * 2000));
+  }
+  craftDraining = false;
+}
+setInterval(drainCraftQueue, 5000);
+
 function aiCraft(d) {
   if (!d.inventory || d.inventory.length < 2) { d.state = 'idle'; return; }
   d.timer++;
@@ -2040,37 +2121,7 @@ function aiCraft(d) {
   if (d.timer >= dur) {
     const item1 = d.inventory[0];
     const item2 = d.inventory[1];
-    // Fire off async craft API call
-    fetch(`${AI.apiBase}/api/craft`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ item1, item2 }),
-    }).then(r => r.json()).then(res => {
-      if (res.ok && res.result) {
-        // Remove the two input items
-        d.inventory.splice(0, 2);
-        // Add result to inventory
-        addInventoryItem(d, res.result);
-        log(`${d.name} ✨ combined ${item1.emoji}${item1.name} + ${item2.emoji}${item2.name} = ${res.result.emoji}${res.result.name}!`, 'craft');
-        addEvent(d, 'craft', `Combined ${item1.name} + ${item2.name} = ${res.result.name}`);
-        d.happiness = Math.min(100, d.happiness + 5);
-        // Track city discoveries
-        const city = cityOf(d);
-        if (city) {
-          if (!city.discoveries) city.discoveries = new Set();
-          city.discoveries.add(res.result.name);
-        }
-      }
-    }).catch(() => {
-      // Local fallback: combine names
-      d.inventory.splice(0, 2);
-      const emojis = ['✨', '🔮', '⚡', '🌀', '💫'];
-      const name = (item1.name.slice(0, 3) + item2.name.slice(-3)).slice(0, 20);
-      const fallback = { emoji: emojis[Math.floor(Math.random() * emojis.length)], name };
-      addInventoryItem(d, fallback);
-      log(`${d.name} ✨ crafted ${fallback.emoji}${fallback.name}`, 'craft');
-      addEvent(d, 'craft', `Crafted ${fallback.name}`);
-    });
+    craftQueue.push({ d, item1, item2 });
     d.target = null; d.timer = 0; d.state = 'idle';
   }
 }
@@ -3914,6 +3965,8 @@ async function init() {
   updateHUD();
   G.mapDirty = true;
   lastSaveTime = Date.now();
+  const loader = document.getElementById('loader');
+  if (loader) { loader.classList.add('fade-out'); setTimeout(() => loader.remove(), 700); }
   requestAnimationFrame(gameLoop);
 
   // Show splash on first visit
