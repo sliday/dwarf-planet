@@ -36,7 +36,7 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 
 ### Trading
 - Dwarves from different cities trade when they meet on the same tile
-- INT advantage: smarter dwarves get 2:1 deals, equal INT = 1:1 swap
+- INT advantage: smarter dwarves get 2:1 deals, equal INT = 1:1 swap (inventory cap enforced)
 - Enemy dwarves refuse to trade (relationship system)
 - Detailed trade logs show exactly what was exchanged
 - 30% trigger chance per meeting to prevent spam
@@ -51,12 +51,16 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 
 ### UI
 - Click inspector for dwarves (stats, inventory, carry, events), cities (ideology), terrain, ships
+- **Live inspector**: open panels auto-refresh every 30 ticks — watch stats change in real time
 - Follow/lock camera on a specific dwarf with pulsing ring indicator
 - City switcher dropdown in top HUD — click city name to jump to any of 125 cities
 - City ideology labels computed from aggregate personality (Militant, Spiritual, Mercantile, etc.)
 - Contextual Mine/Build/Farm/Road designation buttons with drag-to-designate
 - Speed slider (⏸ → 1x → 2x → 5x) for simulation speed control
-- Event log rarity filter (All → Uncommon+ → Notable+ → Rare only) with consecutive entry collapsing (×N)
+- Event log with season emoji timestamps (🌱☀️🍂❄️) and rarity filter with consecutive entry collapsing (×N)
+- **Temperature tinting**: HUD and status bar shift warm amber → cool blue based on camera latitude and season
+- **Year resolutions banner**: each new year shows per-city goals (farming, expansion, crafting) based on population stats
+- Footer shows full season + year (e.g. "Autumn, Year 16")
 - Clickable minimap: click/tap to jump camera to any location on desktop and mobile
 - Splash screen for new visitors + in-game mechanics guide
 - Full mobile support: touch pan, pinch-to-zoom (0.75x–3.0x), tap-to-inspect
