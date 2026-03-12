@@ -889,6 +889,7 @@ const G = {
   ships: [],
   animals: [],
   stats: { mined: 0, built: 0, farmed: 0 },
+  mapDeltas: {},
   cam: { x: 0, y: 0 },
   mode: 'normal', drag: null, sel: null,
   hovTile: null, mapDirty: true,
@@ -4498,6 +4499,7 @@ function getSerializableState() {
       id: s.id, x: s.x, y: s.y, captainId: s.captainId, cityId: s.cityId,
       cargo: s.cargo, state: s.state,
     })),
+    mapDeltas: G.mapDeltas || {},
   };
 }
 
@@ -4676,6 +4678,18 @@ async function restoreState() {
   }
   if (G.animals.length === 0) { for (let i = 0; i < 60; i++) spawnAnimalsFB(); }
 
+  // Restore map deltas
+  if (saved.mapDeltas) {
+    G.mapDeltas = saved.mapDeltas;
+    for (const [key, tile] of Object.entries(saved.mapDeltas)) {
+      const [x, y] = key.split(',').map(Number);
+      if (y >= 0 && y < MAP_H && x >= 0 && x < MAP_W) {
+        G.map[y][x] = tile;
+      }
+    }
+    tileBuffer = null; // Force re-render of tile cache
+  }
+
   // Ensure minimum population: at least 2 dwarves per city
   for (const city of CITIES) {
     if (city.mx === undefined) continue;
@@ -4846,6 +4860,7 @@ function initWorker() {
       paused: G.paused, stats: G.stats,
       homeCityId: G.homeCity?.id,
       aiCityIndex: G.aiCityIndex,
+      mapDeltas: G.mapDeltas || {},
     },
   }, [flat.buffer]);
 

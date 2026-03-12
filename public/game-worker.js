@@ -100,12 +100,13 @@ const G = {
   animals:[], animalGrid:{},
   ships:[], stats:{mined:0,built:0,farmed:0},
   homeCity:null, aiCityIndex:0, dwarfGrid:{},
+  mapDeltas:{},
 };
 
 // Message buffers
 const pendingLogs = [], pendingToasts = [], pendingMapChanges = [];
 function log(msg, type, rarity, cityEmoji) { pendingLogs.push({msg,type,rarity:rarity||1,season:G.season,cityEmoji:cityEmoji||null}); }
-function mapSet(x, y, tile) { G.map[y][x] = tile; pendingMapChanges.push({x,y,tile}); }
+function mapSet(x, y, tile) { G.map[y][x] = tile; G.mapDeltas[`${x},${y}`] = tile; pendingMapChanges.push({x,y,tile}); }
 
 // Helpers
 function wrapX(x) { return ((x % MAP_W) + MAP_W) % MAP_W; }
@@ -1674,6 +1675,7 @@ function getSerializableState() {
       id:s.id,x:s.x,y:s.y,captainId:s.captainId,cityId:s.cityId,
       cargo:s.cargo,state:s.state,
     })),
+    mapDeltas:G.mapDeltas,
   };
 }
 
@@ -1701,6 +1703,7 @@ self.onmessage = function(e) {
       G.stats = data.state?.stats || G.stats;
       G.homeCity = CITIES.find(c => c.id === data.state?.homeCityId) || CITIES[0];
       G.aiCityIndex = data.state?.aiCityIndex || 0;
+      G.mapDeltas = data.state?.mapDeltas || {};
       // Restore dwarf paths/targets to empty (they were stripped for transfer)
       for (const d of G.dwarves) {
         if (!d.path) d.path = [];
@@ -1720,7 +1723,7 @@ self.onmessage = function(e) {
       if (data.paused !== undefined) G.paused = data.paused;
       break;
     case 'designate':
-      for (const ch of data.changes) G.map[ch.y][ch.x] = ch.tile;
+      for (const ch of data.changes) { G.map[ch.y][ch.x] = ch.tile; G.mapDeltas[`${ch.x},${ch.y}`] = ch.tile; }
       break;
     case 'save_request':
       self.postMessage({type:'save_response', state:getSerializableState()});
@@ -1772,6 +1775,17 @@ self.onmessage = function(e) {
           cargoTotal:Object.values(s.cargo||{}).reduce((a,b)=>a+b,0),
           path:[], target:null,
         }));
+      }
+      // Restore map deltas
+      if (saved.mapDeltas) {
+        G.mapDeltas = saved.mapDeltas;
+        for (const [key, tile] of Object.entries(saved.mapDeltas)) {
+          const [x, y] = key.split(',').map(Number);
+          if (y >= 0 && y < MAP_H && x >= 0 && x < MAP_W) {
+            G.map[y][x] = tile;
+            pendingMapChanges.push({x, y, tile});
+          }
+        }
       }
       // Ensure min population
       for (const city of CITIES) {
