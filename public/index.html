@@ -297,6 +297,10 @@ const WALKABLE = new Set([
   T.D_MINE, T.D_FARM, T.D_ROAD, T.ROAD, T.RAILROAD,
   T.BERRY_BUSH, T.HERB_PATCH, T.CLAY, T.DEER, T.CRAB
 ]);
+const WILD_FOOD = new Set([T.MUSHROOM, T.BERRY_BUSH, T.CRAB]);
+const GATHERABLE = new Set([T.BERRY_BUSH, T.HERB_PATCH, T.IRON_ORE, T.GOLD_VEIN, T.GEMS, T.FISH_SPOT, T.CRAB, T.DEER, T.CLAY, T.CORAL]);
+const STARVE_IMMOBILE = 2000;
+const STARVE_DEATH = 2667;
 
 const TERRAIN_PROPS = {
   [T.OCEAN]:     { speed: 0, desc: 'Deep water, impassable' },
@@ -427,75 +431,75 @@ const LAND = [
 
 // ---- Cities with real coordinates ----
 const CITIES = [
-  { id: 'new-york', name: 'New York', lon: -74, lat: 41, emoji: '🗽', culture: 'american' },
-  { id: 'london', name: 'London', lon: 0, lat: 52, emoji: '🎡', culture: 'british' },
+  { id: 'new-york', name: 'New York', lon: -74, lat: 41, emoji: '🗽', culture: 'american', coastal: true },
+  { id: 'london', name: 'London', lon: 0, lat: 52, emoji: '🎡', culture: 'british', coastal: true },
   { id: 'paris', name: 'Paris', lon: 2, lat: 49, emoji: '🗼', culture: 'french' },
-  { id: 'tokyo', name: 'Tokyo', lon: 140, lat: 36, emoji: '🗾', culture: 'japanese' },
+  { id: 'tokyo', name: 'Tokyo', lon: 140, lat: 36, emoji: '🗾', culture: 'japanese', coastal: true },
   { id: 'cairo', name: 'Cairo', lon: 31, lat: 30, emoji: '🏛️', culture: 'egyptian' },
-  { id: 'sydney', name: 'Sydney', lon: 151, lat: -34, emoji: '🦘', culture: 'australian' },
-  { id: 'rio', name: 'Rio', lon: -43, lat: -23, emoji: '🎭', culture: 'brazilian' },
+  { id: 'sydney', name: 'Sydney', lon: 151, lat: -34, emoji: '🦘', culture: 'australian', coastal: true },
+  { id: 'rio', name: 'Rio', lon: -43, lat: -23, emoji: '🎭', culture: 'brazilian', coastal: true },
   { id: 'beijing', name: 'Beijing', lon: 116, lat: 40, emoji: '🏯', culture: 'chinese' },
   { id: 'delhi', name: 'Delhi', lon: 77, lat: 29, emoji: '🕌', culture: 'indian' },
   { id: 'nairobi', name: 'Nairobi', lon: 37, lat: -1, emoji: '🦁', culture: 'kenyan' },
   { id: 'mexico-city', name: 'Mexico City', lon: -99, lat: 19, emoji: '🌮', culture: 'mexican' },
-  { id: 'buenos-aires', name: 'Buenos Aires', lon: -58, lat: -35, emoji: '💃', culture: 'argentinian' },
-  { id: 'istanbul', name: 'Istanbul', lon: 29, lat: 41, emoji: '🕌', culture: 'turkish' },
-  { id: 'lagos', name: 'Lagos', lon: 3, lat: 6, emoji: '🥁', culture: 'nigerian' },
-  { id: 'dubai', name: 'Dubai', lon: 55, lat: 25, emoji: '🏙️', culture: 'emirati' },
-  { id: 'singapore', name: 'Singapore', lon: 104, lat: 1, emoji: '🦁', culture: 'singaporean' },
-  { id: 'seoul', name: 'Seoul', lon: 127, lat: 37, emoji: '🎎', culture: 'korean' },
-  { id: 'los-angeles', name: 'Los Angeles', lon: -118, lat: 34, emoji: '🎬', culture: 'american' },
-  { id: 'mumbai', name: 'Mumbai', lon: 73, lat: 19, emoji: '🎬', culture: 'indian' },
-  { id: 'bangkok', name: 'Bangkok', lon: 101, lat: 14, emoji: '🛕', culture: 'thai' },
-  { id: 'lima', name: 'Lima', lon: -77, lat: -12, emoji: '🏔️', culture: 'peruvian' },
-  { id: 'rome', name: 'Rome', lon: 12, lat: 42, emoji: '🏛️', culture: 'italian' },
+  { id: 'buenos-aires', name: 'Buenos Aires', lon: -58, lat: -35, emoji: '💃', culture: 'argentinian', coastal: true },
+  { id: 'istanbul', name: 'Istanbul', lon: 29, lat: 41, emoji: '🕌', culture: 'turkish', coastal: true },
+  { id: 'lagos', name: 'Lagos', lon: 3, lat: 6, emoji: '🥁', culture: 'nigerian', coastal: true },
+  { id: 'dubai', name: 'Dubai', lon: 55, lat: 25, emoji: '🏙️', culture: 'emirati', coastal: true },
+  { id: 'singapore', name: 'Singapore', lon: 104, lat: 1, emoji: '🦁', culture: 'singaporean', coastal: true },
+  { id: 'seoul', name: 'Seoul', lon: 127, lat: 37, emoji: '🎎', culture: 'korean', coastal: true },
+  { id: 'los-angeles', name: 'Los Angeles', lon: -118, lat: 34, emoji: '🎬', culture: 'american', coastal: true },
+  { id: 'mumbai', name: 'Mumbai', lon: 73, lat: 19, emoji: '🎬', culture: 'indian', coastal: true },
+  { id: 'bangkok', name: 'Bangkok', lon: 101, lat: 14, emoji: '🛕', culture: 'thai', coastal: true },
+  { id: 'lima', name: 'Lima', lon: -77, lat: -12, emoji: '🏔️', culture: 'peruvian', coastal: true },
+  { id: 'rome', name: 'Rome', lon: 12, lat: 42, emoji: '🏛️', culture: 'italian', coastal: true },
   { id: 'berlin', name: 'Berlin', lon: 13, lat: 52, emoji: '🏰', culture: 'german' },
-  { id: 'reykjavik', name: 'Reykjavik', lon: -22, lat: 64, emoji: '🧊', culture: 'icelandic' },
-  { id: 'cape-town', name: 'Cape Town', lon: 18, lat: -34, emoji: '🐧', culture: 'south_african' },
-  { id: 'honolulu', name: 'Honolulu', lon: -158, lat: 21, emoji: '🌺', culture: 'hawaiian' },
-  { id: 'anchorage', name: 'Anchorage', lon: -150, lat: 61, emoji: '🐻', culture: 'alaskan' },
+  { id: 'reykjavik', name: 'Reykjavik', lon: -22, lat: 64, emoji: '🧊', culture: 'icelandic', coastal: true },
+  { id: 'cape-town', name: 'Cape Town', lon: 18, lat: -34, emoji: '🐧', culture: 'south_african', coastal: true },
+  { id: 'honolulu', name: 'Honolulu', lon: -158, lat: 21, emoji: '🌺', culture: 'hawaiian', coastal: true },
+  { id: 'anchorage', name: 'Anchorage', lon: -150, lat: 61, emoji: '🐻', culture: 'alaskan', coastal: true },
   { id: 'krakow', name: 'Krakow', lon: 20, lat: 50, emoji: '🐉', culture: 'polish' },
   { id: 'madrid', name: 'Madrid', lon: -4, lat: 40, emoji: '🐂', culture: 'spanish' },
-  { id: 'lisbon', name: 'Lisbon', lon: -9, lat: 39, emoji: '⛵', culture: 'portuguese' },
-  { id: 'amsterdam', name: 'Amsterdam', lon: 5, lat: 52, emoji: '🌷', culture: 'dutch' },
+  { id: 'lisbon', name: 'Lisbon', lon: -9, lat: 39, emoji: '⛵', culture: 'portuguese', coastal: true },
+  { id: 'amsterdam', name: 'Amsterdam', lon: 5, lat: 52, emoji: '🌷', culture: 'dutch', coastal: true },
   { id: 'vienna', name: 'Vienna', lon: 16, lat: 48, emoji: '🎻', culture: 'austrian' },
-  { id: 'athens', name: 'Athens', lon: 24, lat: 38, emoji: '🏛️', culture: 'greek' },
-  { id: 'stockholm', name: 'Stockholm', lon: 18, lat: 59, emoji: '👑', culture: 'swedish' },
-  { id: 'oslo', name: 'Oslo', lon: 11, lat: 60, emoji: '🛡️', culture: 'norwegian' },
-  { id: 'helsinki', name: 'Helsinki', lon: 25, lat: 60, emoji: '🧖', culture: 'finnish' },
+  { id: 'athens', name: 'Athens', lon: 24, lat: 38, emoji: '🏛️', culture: 'greek', coastal: true },
+  { id: 'stockholm', name: 'Stockholm', lon: 18, lat: 59, emoji: '👑', culture: 'swedish', coastal: true },
+  { id: 'oslo', name: 'Oslo', lon: 11, lat: 60, emoji: '🛡️', culture: 'norwegian', coastal: true },
+  { id: 'helsinki', name: 'Helsinki', lon: 25, lat: 60, emoji: '🧖', culture: 'finnish', coastal: true },
   { id: 'prague', name: 'Prague', lon: 14, lat: 50, emoji: '🏰', culture: 'czech' },
   { id: 'kyiv', name: 'Kyiv', lon: 31, lat: 50, emoji: '🌻', culture: 'ukrainian' },
   { id: 'tehran', name: 'Tehran', lon: 51, lat: 36, emoji: '🕌', culture: 'iranian' },
   { id: 'hanoi', name: 'Hanoi', lon: 106, lat: 21, emoji: '🍜', culture: 'vietnamese' },
-  { id: 'manila', name: 'Manila', lon: 121, lat: 15, emoji: '🌺', culture: 'filipino' },
-  { id: 'jakarta', name: 'Jakarta', lon: 107, lat: -6, emoji: '🌴', culture: 'indonesian' },
+  { id: 'manila', name: 'Manila', lon: 121, lat: 15, emoji: '🌺', culture: 'filipino', coastal: true },
+  { id: 'jakarta', name: 'Jakarta', lon: 107, lat: -6, emoji: '🌴', culture: 'indonesian', coastal: true },
   { id: 'addis-ababa', name: 'Addis Ababa', lon: 38, lat: 9, emoji: '☕', culture: 'ethiopian' },
   { id: 'bogota', name: 'Bogota', lon: -74, lat: 5, emoji: '🦜', culture: 'colombian' },
   { id: 'santiago', name: 'Santiago', lon: -71, lat: -33, emoji: '🏔️', culture: 'chilean' },
   { id: 'ottawa', name: 'Ottawa', lon: -76, lat: 45, emoji: '🍁', culture: 'canadian' },
-  { id: 'wellington', name: 'Wellington', lon: 175, lat: -41, emoji: '🥝', culture: 'kiwi' },
-  { id: 'rabat', name: 'Rabat', lon: -7, lat: 34, emoji: '🫖', culture: 'moroccan' },
-  { id: 'dublin', name: 'Dublin', lon: -6, lat: 53, emoji: '☘️', culture: 'irish' },
+  { id: 'wellington', name: 'Wellington', lon: 175, lat: -41, emoji: '🥝', culture: 'kiwi', coastal: true },
+  { id: 'rabat', name: 'Rabat', lon: -7, lat: 34, emoji: '🫖', culture: 'moroccan', coastal: true },
+  { id: 'dublin', name: 'Dublin', lon: -6, lat: 53, emoji: '☘️', culture: 'irish', coastal: true },
   // US STATE CAPITALS (spread across states)
   { id: 'washington-dc', name: 'Washington DC', lon: -77, lat: 39, emoji: '🏛️', culture: 'american' },
   { id: 'atlanta', name: 'Atlanta', lon: -84, lat: 34, emoji: '🍑', culture: 'american' },
   { id: 'chicago', name: 'Chicago', lon: -88, lat: 42, emoji: '🌬️', culture: 'american' },
-  { id: 'houston', name: 'Houston', lon: -95, lat: 30, emoji: '🚀', culture: 'american' },
+  { id: 'houston', name: 'Houston', lon: -95, lat: 30, emoji: '🚀', culture: 'american', coastal: true },
   { id: 'denver', name: 'Denver', lon: -105, lat: 40, emoji: '⛰️', culture: 'american' },
   { id: 'phoenix', name: 'Phoenix', lon: -112, lat: 33, emoji: '🌵', culture: 'american' },
-  { id: 'seattle', name: 'Seattle', lon: -122, lat: 48, emoji: '☕', culture: 'american' },
-  { id: 'miami', name: 'Miami', lon: -80, lat: 26, emoji: '🌴', culture: 'american' },
-  { id: 'boston', name: 'Boston', lon: -71, lat: 42, emoji: '🦞', culture: 'american' },
+  { id: 'seattle', name: 'Seattle', lon: -122, lat: 48, emoji: '☕', culture: 'american', coastal: true },
+  { id: 'miami', name: 'Miami', lon: -80, lat: 26, emoji: '🌴', culture: 'american', coastal: true },
+  { id: 'boston', name: 'Boston', lon: -71, lat: 42, emoji: '🦞', culture: 'american', coastal: true },
   { id: 'nashville', name: 'Nashville', lon: -87, lat: 36, emoji: '🎸', culture: 'american' },
   { id: 'minneapolis', name: 'Minneapolis', lon: -93, lat: 45, emoji: '❄️', culture: 'american' },
   { id: 'salt-lake-city', name: 'Salt Lake City', lon: -112, lat: 41, emoji: '🏔️', culture: 'american' },
-  { id: 'san-francisco', name: 'San Francisco', lon: -122, lat: 38, emoji: '🌉', culture: 'american' },
-  { id: 'portland', name: 'Portland', lon: -123, lat: 46, emoji: '🌲', culture: 'american' },
+  { id: 'san-francisco', name: 'San Francisco', lon: -122, lat: 38, emoji: '🌉', culture: 'american', coastal: true },
+  { id: 'portland', name: 'Portland', lon: -123, lat: 46, emoji: '🌲', culture: 'american', coastal: true },
   { id: 'detroit', name: 'Detroit', lon: -83, lat: 42, emoji: '🏭', culture: 'american' },
   { id: 'dallas', name: 'Dallas', lon: -97, lat: 33, emoji: '🤠', culture: 'american' },
   { id: 'kansas-city', name: 'Kansas City', lon: -95, lat: 39, emoji: '🥩', culture: 'american' },
-  { id: 'new-orleans', name: 'New Orleans', lon: -90, lat: 30, emoji: '🎺', culture: 'american' },
-  { id: 'charleston', name: 'Charleston', lon: -80, lat: 33, emoji: '🏰', culture: 'american' },
+  { id: 'new-orleans', name: 'New Orleans', lon: -90, lat: 30, emoji: '🎺', culture: 'american', coastal: true },
+  { id: 'charleston', name: 'Charleston', lon: -80, lat: 33, emoji: '🏰', culture: 'american', coastal: true },
   { id: 'pittsburgh', name: 'Pittsburgh', lon: -80, lat: 40, emoji: '🔩', culture: 'american' },
   { id: 'st-louis', name: 'St. Louis', lon: -90, lat: 39, emoji: '⛩️', culture: 'american' },
   { id: 'las-vegas', name: 'Las Vegas', lon: -115, lat: 36, emoji: '🎰', culture: 'american' },
@@ -503,61 +507,61 @@ const CITIES = [
   { id: 'omaha', name: 'Omaha', lon: -96, lat: 41, emoji: '🌽', culture: 'american' },
   { id: 'boise', name: 'Boise', lon: -116, lat: 44, emoji: '🥔', culture: 'american' },
   // CENTRAL AMERICA
-  { id: 'havana', name: 'Havana', lon: -82, lat: 23, emoji: '🚬', culture: 'cuban' },
+  { id: 'havana', name: 'Havana', lon: -82, lat: 23, emoji: '🚬', culture: 'cuban', coastal: true },
   { id: 'guatemala-city', name: 'Guatemala City', lon: -91, lat: 15, emoji: '🌋', culture: 'guatemalan' },
   { id: 'san-jose-cr', name: 'San Jose', lon: -84, lat: 10, emoji: '🦜', culture: 'costa_rican' },
-  { id: 'panama-city', name: 'Panama City', lon: -80, lat: 9, emoji: '🚢', culture: 'panamanian' },
-  { id: 'kingston', name: 'Kingston', lon: -77, lat: 18, emoji: '🎶', culture: 'jamaican' },
-  { id: 'santo-domingo', name: 'Santo Domingo', lon: -70, lat: 19, emoji: '🏝️', culture: 'dominican' },
+  { id: 'panama-city', name: 'Panama City', lon: -80, lat: 9, emoji: '🚢', culture: 'panamanian', coastal: true },
+  { id: 'kingston', name: 'Kingston', lon: -77, lat: 18, emoji: '🎶', culture: 'jamaican', coastal: true },
+  { id: 'santo-domingo', name: 'Santo Domingo', lon: -70, lat: 19, emoji: '🏝️', culture: 'dominican', coastal: true },
   { id: 'tegucigalpa', name: 'Tegucigalpa', lon: -87, lat: 14, emoji: '🏔️', culture: 'honduran' },
   { id: 'managua', name: 'Managua', lon: -86, lat: 12, emoji: '🌊', culture: 'nicaraguan' },
   { id: 'san-salvador', name: 'San Salvador', lon: -89, lat: 14, emoji: '🌺', culture: 'salvadoran' },
   // SOUTH AMERICA (additional)
-  { id: 'caracas', name: 'Caracas', lon: -67, lat: 10, emoji: '🦅', culture: 'venezuelan' },
+  { id: 'caracas', name: 'Caracas', lon: -67, lat: 10, emoji: '🦅', culture: 'venezuelan', coastal: true },
   { id: 'quito', name: 'Quito', lon: -79, lat: 0, emoji: '🌋', culture: 'ecuadorian' },
-  { id: 'montevideo', name: 'Montevideo', lon: -56, lat: -35, emoji: '🧉', culture: 'uruguayan' },
+  { id: 'montevideo', name: 'Montevideo', lon: -56, lat: -35, emoji: '🧉', culture: 'uruguayan', coastal: true },
   { id: 'asuncion', name: 'Asuncion', lon: -58, lat: -25, emoji: '🌿', culture: 'paraguayan' },
   { id: 'la-paz', name: 'La Paz', lon: -68, lat: -16, emoji: '🏔️', culture: 'bolivian' },
   { id: 'brasilia', name: 'Brasilia', lon: -48, lat: -16, emoji: '🏛️', culture: 'brazilian' },
   { id: 'sao-paulo', name: 'Sao Paulo', lon: -47, lat: -24, emoji: '🏙️', culture: 'brazilian' },
-  { id: 'georgetown', name: 'Georgetown', lon: -58, lat: 7, emoji: '🌴', culture: 'guyanese' },
-  { id: 'paramaribo', name: 'Paramaribo', lon: -55, lat: 6, emoji: '🌺', culture: 'surinamese' },
+  { id: 'georgetown', name: 'Georgetown', lon: -58, lat: 7, emoji: '🌴', culture: 'guyanese', coastal: true },
+  { id: 'paramaribo', name: 'Paramaribo', lon: -55, lat: 6, emoji: '🌺', culture: 'surinamese', coastal: true },
   // ARAB WORLD & MIDDLE EAST
   { id: 'riyadh', name: 'Riyadh', lon: 47, lat: 25, emoji: '🕌', culture: 'saudi' },
   { id: 'baghdad', name: 'Baghdad', lon: 44, lat: 33, emoji: '🏛️', culture: 'iraqi' },
   { id: 'damascus', name: 'Damascus', lon: 36, lat: 34, emoji: '🕌', culture: 'syrian' },
   { id: 'amman', name: 'Amman', lon: 36, lat: 32, emoji: '🏛️', culture: 'jordanian' },
-  { id: 'beirut', name: 'Beirut', lon: 36, lat: 34, emoji: '🌲', culture: 'lebanese' },
-  { id: 'doha', name: 'Doha', lon: 51, lat: 25, emoji: '🏙️', culture: 'qatari' },
-  { id: 'muscat', name: 'Muscat', lon: 59, lat: 24, emoji: '⛵', culture: 'omani' },
+  { id: 'beirut', name: 'Beirut', lon: 35, lat: 34, emoji: '🌲', culture: 'lebanese', coastal: true },
+  { id: 'doha', name: 'Doha', lon: 51, lat: 25, emoji: '🏙️', culture: 'qatari', coastal: true },
+  { id: 'muscat', name: 'Muscat', lon: 59, lat: 24, emoji: '⛵', culture: 'omani', coastal: true },
   { id: 'sanaa', name: "Sana'a", lon: 44, lat: 15, emoji: '🏰', culture: 'yemeni' },
-  { id: 'tunis', name: 'Tunis', lon: 10, lat: 37, emoji: '🏛️', culture: 'tunisian' },
-  { id: 'algiers', name: 'Algiers', lon: 3, lat: 37, emoji: '🏛️', culture: 'algerian' },
-  { id: 'tripoli', name: 'Tripoli', lon: 13, lat: 33, emoji: '🏛️', culture: 'libyan' },
+  { id: 'tunis', name: 'Tunis', lon: 10, lat: 37, emoji: '🏛️', culture: 'tunisian', coastal: true },
+  { id: 'algiers', name: 'Algiers', lon: 3, lat: 37, emoji: '🏛️', culture: 'algerian', coastal: true },
+  { id: 'tripoli', name: 'Tripoli', lon: 13, lat: 33, emoji: '🏛️', culture: 'libyan', coastal: true },
   { id: 'khartoum', name: 'Khartoum', lon: 33, lat: 16, emoji: '🏜️', culture: 'sudanese' },
   // AFRICA (additional)
-  { id: 'accra', name: 'Accra', lon: 0, lat: 6, emoji: '🥁', culture: 'ghanaian' },
-  { id: 'dakar', name: 'Dakar', lon: -17, lat: 15, emoji: '🌊', culture: 'senegalese' },
+  { id: 'accra', name: 'Accra', lon: 0, lat: 6, emoji: '🥁', culture: 'ghanaian', coastal: true },
+  { id: 'dakar', name: 'Dakar', lon: -17, lat: 15, emoji: '🌊', culture: 'senegalese', coastal: true },
   { id: 'kinshasa', name: 'Kinshasa', lon: 15, lat: -4, emoji: '🌴', culture: 'congolese' },
-  { id: 'dar-es-salaam', name: 'Dar es Salaam', lon: 39, lat: -7, emoji: '🌴', culture: 'tanzanian' },
+  { id: 'dar-es-salaam', name: 'Dar es Salaam', lon: 39, lat: -7, emoji: '🌴', culture: 'tanzanian', coastal: true },
   { id: 'kampala', name: 'Kampala', lon: 33, lat: 0, emoji: '🏔️', culture: 'ugandan' },
-  { id: 'luanda', name: 'Luanda', lon: 13, lat: -9, emoji: '🌊', culture: 'angolan' },
-  { id: 'maputo', name: 'Maputo', lon: 33, lat: -26, emoji: '🌊', culture: 'mozambican' },
+  { id: 'luanda', name: 'Luanda', lon: 13, lat: -9, emoji: '🌊', culture: 'angolan', coastal: true },
+  { id: 'maputo', name: 'Maputo', lon: 33, lat: -26, emoji: '🌊', culture: 'mozambican', coastal: true },
   { id: 'abuja', name: 'Abuja', lon: 7, lat: 9, emoji: '🏛️', culture: 'nigerian' },
-  { id: 'casablanca', name: 'Casablanca', lon: -8, lat: 34, emoji: '🕌', culture: 'moroccan' },
+  { id: 'casablanca', name: 'Casablanca', lon: -8, lat: 34, emoji: '🕌', culture: 'moroccan', coastal: true },
   { id: 'johannesburg', name: 'Johannesburg', lon: 28, lat: -26, emoji: '💎', culture: 'south_african' },
   { id: 'antananarivo', name: 'Antananarivo', lon: 48, lat: -19, emoji: '🦎', culture: 'malagasy' },
   // CANADA (additional)
   { id: 'toronto', name: 'Toronto', lon: -79, lat: 44, emoji: '🏙️', culture: 'canadian' },
-  { id: 'vancouver', name: 'Vancouver', lon: -123, lat: 49, emoji: '🌲', culture: 'canadian' },
+  { id: 'vancouver', name: 'Vancouver', lon: -123, lat: 49, emoji: '🌲', culture: 'canadian', coastal: true },
   { id: 'montreal', name: 'Montreal', lon: -74, lat: 46, emoji: '⚜️', culture: 'canadian' },
   { id: 'calgary', name: 'Calgary', lon: -114, lat: 51, emoji: '🤠', culture: 'canadian' },
   { id: 'edmonton', name: 'Edmonton', lon: -113, lat: 54, emoji: '🛢️', culture: 'canadian' },
   { id: 'winnipeg', name: 'Winnipeg', lon: -97, lat: 50, emoji: '❄️', culture: 'canadian' },
-  { id: 'halifax', name: 'Halifax', lon: -64, lat: 45, emoji: '⚓', culture: 'canadian' },
+  { id: 'halifax', name: 'Halifax', lon: -64, lat: 45, emoji: '⚓', culture: 'canadian', coastal: true },
   { id: 'whitehorse', name: 'Whitehorse', lon: -135, lat: 61, emoji: '🐺', culture: 'canadian' },
   { id: 'yellowknife', name: 'Yellowknife', lon: -114, lat: 62, emoji: '💎', culture: 'canadian' },
-  { id: 'iqaluit', name: 'Iqaluit', lon: -69, lat: 64, emoji: '🏔️', culture: 'canadian' },
+  { id: 'iqaluit', name: 'Iqaluit', lon: -69, lat: 64, emoji: '🏔️', culture: 'canadian', coastal: true },
 ];
 
 const CULTURES = {
@@ -1026,7 +1030,7 @@ function generateMap() {
           if (ny >= 0 && ny < MAP_H && G.map[ny][nx] === T.OCEAN) hasNearbyOcean = true;
         }
       }
-      if (hasNearbyOcean) {
+      if (hasNearbyOcean && city.coastal) {
         // BFS from city position to find nearest land tile adjacent to ocean
         let bestX = cx, bestY = cy, bestDist = Infinity;
         for (let dy = -8; dy <= 8; dy++) {
@@ -1275,7 +1279,7 @@ function bfs(sx, sy, goalFn, walkToGoal) {
   const par = new Map();
   const dirs = [[0, -1], [1, 0], [0, 1], [-1, 0]];
   let steps = 0;
-  while (pq.length > 0 && steps < 8000) {
+  while (pq.length > 0 && steps < 2000) {
     const [cost, cx, cy] = pq.pop(); steps++;
     const ck = key(cx, cy);
     if (cost > (dist.get(ck) ?? Infinity)) continue;
@@ -1481,6 +1485,27 @@ function tickDwarf(d) {
   d.energy = Math.max(0, d.energy - 0.02);
   d.happiness = Math.max(0, Math.min(100, d.happiness - 0.005));
 
+  if (d.hunger <= 0) {
+    d.starveTicks = (d.starveTicks || 0) + 1;
+    if (d.starveTicks >= STARVE_DEATH) {
+      log(`${d.name} \u2620\uFE0F starved to death`, 'system');
+      addEvent(d, 'death', 'Died of starvation');
+      d.dead = true; return;
+    }
+    if (d.starveTicks >= STARVE_IMMOBILE && d.state !== 'starving') {
+      d.state = 'starving'; d.target = null; d.path = [];
+      log(`${d.name} \uD83D\uDE35 is too weak to move \u2014 needs food!`, 'system');
+    }
+  } else {
+    d.starveTicks = 0;
+  }
+
+  if (d.state === 'starving') {
+    // Immobile - tryShareFood still runs via nearbyDwarves
+    tryShareFood(d);
+    return;
+  }
+
   if (d.hunger < 20 && d.state !== 'eating' && d.state !== 'going_eat') {
     d.state = 'seek_food'; d.target = null; d.path = [];
   } else if (d.energy < 15 && d.state !== 'sleeping' && d.state !== 'going_sleep') {
@@ -1505,6 +1530,7 @@ function tickDwarf(d) {
     case 'seek_craft': aiSeekCraft(d); break;
     case 'crafting': aiCraft(d); break;
     case 'sailing': aiSail(d); break;
+    case 'going_rescue': aiWalk(d); break;
   }
 }
 
@@ -1520,11 +1546,18 @@ function seekDeposit(d) {
   return false;
 }
 
-// Food sharing: friendly dwarves share with very hungry neighbors
+function nearbyDwarves(x, y) {
+  const bx = x >> 3, by = y >> 3, result = [];
+  for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+    const bucket = G.dwarfGrid?.[`${bx + dx},${by + dy}`];
+    if (bucket) for (const d of bucket) result.push(d);
+  }
+  return result;
+}
+
 function tryShareFood(d) {
-  if (d.hunger >= 30) return; // only share when very hungry
-  // Find adjacent dwarves from same city
-  for (const other of G.dwarves) {
+  if (d.hunger >= 30) return;
+  for (const other of nearbyDwarves(d.x, d.y)) {
     if (other.id === d.id || other.cityId !== d.cityId) continue;
     const dx = Math.abs(other.x - d.x), dy = Math.abs(other.y - d.y);
     if (dx > 1 || dy > 1) continue; // must be adjacent
@@ -1556,8 +1589,7 @@ function tryShareFood(d) {
 
 function tryTrade(d) {
   if (!d.inventory?.length) return false;
-  // Find adjacent dwarf from different city with inventory
-  for (const other of G.dwarves) {
+  for (const other of nearbyDwarves(d.x, d.y)) {
     if (other.id === d.id || other.cityId === d.cityId) continue;
     if (other.x !== d.x || other.y !== d.y) continue;
     if (other.state !== 'idle' && other.state !== 'wander') continue;
@@ -1621,7 +1653,29 @@ function tryTrade(d) {
 }
 
 function aiIdle(d) {
+  if (d._tickSlot === undefined) d._tickSlot = G.dwarves.indexOf(d) % 4;
+  if (G.tick % 4 !== d._tickSlot) return;
   if (executeIntent(d)) return;
+  if (d.carryItems?.food > 0) {
+    const starving = G.dwarves.find(o => o.cityId === d.cityId && o.state === 'starving' && o.id !== d.id);
+    if (starving) {
+      const mp = bfs(d.x, d.y, (x, y) => x === starving.x && y === starving.y, true);
+      if (mp && mp.length < 40) {
+        d.target = { type: 'rescue_feed', dwarfId: starving.id };
+        d.path = mp.slice(0, -1);
+        d.state = d.path.length > 0 ? 'going_rescue' : 'idle';
+        if (d.state === 'idle') {
+          const amt = Math.min(d.carryItems.food, 3);
+          d.carryItems.food -= amt; d.carrying -= amt;
+          starving.hunger = Math.min(100, starving.hunger + amt * 12);
+          starving.starveTicks = 0; starving.state = 'idle';
+          log(`${d.name} \uD83E\uDD1D rescued ${starving.name} with food!`, 'eat');
+          d.target = null;
+        }
+        return;
+      }
+    }
+  }
   // If carrying resources, go deposit first
   if ((d.carrying || 0) >= carryCapacity(d)) {
     if (seekDeposit(d)) return;
@@ -1708,7 +1762,6 @@ function aiIdle(d) {
   }
 
   // Gather from nearby resource tiles
-  const GATHERABLE = new Set([T.BERRY_BUSH, T.HERB_PATCH, T.IRON_ORE, T.GOLD_VEIN, T.GEMS, T.FISH_SPOT, T.CRAB, T.DEER, T.CLAY, T.CORAL]);
   const gp = bfs(d.x, d.y, (x, y) => GATHERABLE.has(G.map[y][x]), false);
   if (gp && gp.length < 30) {
     const last = gp[gp.length - 1];
@@ -1756,6 +1809,17 @@ function aiWalk(d) {
       }
       d.target = null; d.timer = 0; d.state = 'idle';
       return;
+    }
+    else if (tt === 'rescue_feed') {
+      const starving = G.dwarves.find(o => o.id === d.target.dwarfId);
+      if (starving && d.carryItems?.food > 0) {
+        const amt = Math.min(d.carryItems.food, 3);
+        d.carryItems.food -= amt; d.carrying -= amt;
+        starving.hunger = Math.min(100, starving.hunger + amt * 12);
+        starving.starveTicks = 0; starving.state = 'idle';
+        log(`${d.name} \uD83E\uDD1D rescued ${starving.name} with food!`, 'eat');
+      }
+      d.target = null; d.state = 'idle'; return;
     }
     else d.state = 'idle';
     d.timer = 0; return;
@@ -2299,8 +2363,6 @@ function trySeaSailing(d) {
 
 function aiSeekFood(d) {
   const res = cityOf(d).res || { food: 0 };
-  // Try wild food sources first: mushrooms, berries, crabs, fish
-  const WILD_FOOD = new Set([T.MUSHROOM, T.BERRY_BUSH, T.CRAB]);
   const mp = bfs(d.x, d.y, (x, y) => WILD_FOOD.has(G.map[y][x]), true);
   if (mp && mp.length < 25) {
     const last = mp[mp.length - 1];
@@ -2654,7 +2716,8 @@ function render() {
     for (const cpx of [px, px2, px3]) {
       if (cpx > -100 && cpx < w + 100 && py > -20 && py < h + 20) {
         ctx.fillStyle = 'rgba(29,32,33,0.7)';
-        const tw = ctx.measureText(city.emoji + ' ' + city.name).width;
+        if (!city._labelWidth) city._labelWidth = ctx.measureText(city.emoji + ' ' + city.name).width;
+        const tw = city._labelWidth;
         ctx.fillRect(cpx - tw / 2 - 3, py - 13, tw + 6, 15);
         ctx.fillStyle = '#fbf1c7';
         ctx.fillText(city.emoji + ' ' + city.name, cpx, py);
@@ -2678,7 +2741,8 @@ function render() {
       ctx.strokeRect(px + 3, py + 3, TILE - 6, TILE - 6);
 
       // Dwarf emoji (use cached canvas images for performance)
-      const dEmoji = d.state === 'sleeping' ? '💤' : d.state === 'mining' ? '⛏️' :
+      const dEmoji = d.state === 'starving' ? '💀' :
+                     d.state === 'sleeping' ? '💤' : d.state === 'mining' ? '⛏️' :
                      d.state === 'eating' || d.state === 'going_eat' ? '🍖' :
                      d.state === 'building' ? '🔨' : d.state === 'farming' ? '🌱' :
                      d.state === 'hauling' ? '📦' : d.state === 'gathering' ? '🧺' :
@@ -3753,16 +3817,22 @@ function gameLoop(ts) {
     tickAccum += dt * G.speed;
     const TICK = 100;
     let ticked = 0;
-    while (tickAccum >= TICK && ticked < 10) {
+    while (tickAccum >= TICK && ticked < 3) {
       tickAccum -= TICK; G.tick++; ticked++;
       try {
+        G.dwarfGrid = {};
+        for (const d of G.dwarves) {
+          const key = `${d.x >> 3},${d.y >> 3}`;
+          (G.dwarfGrid[key] ??= []).push(d);
+        }
         for (const d of G.dwarves) tickDwarf(d);
+        G.dwarves = G.dwarves.filter(d => !d.dead);
         tickShips();
         tickSeason();
       } catch (e) { console.error('Tick error:', e); }
       if (G.tick % 30 === 0) updateHUD();
     }
-    if (ticked >= 10) tickAccum = 0;
+    if (ticked >= 3) tickAccum = 0;
 
     // AI calls (real-time intervals, independent of game speed)
     aiTickAll();

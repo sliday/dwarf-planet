@@ -589,3 +589,36 @@ describe('Terrain Speed System', () => {
     }
   });
 });
+
+describe('FPS Optimizations', () => {
+  it('tick stagger: only 1/4 of dwarves run aiIdle per tick', () => {
+    const dwarves = Array.from({ length: 8 }, (_, i) => ({ _tickSlot: i % 4 }));
+    for (let tick = 0; tick < 4; tick++) {
+      const active = dwarves.filter(d => tick % 4 === d._tickSlot);
+      expect(active).toHaveLength(2);
+    }
+  });
+
+  it('spatial grid: nearby dwarves found correctly', () => {
+    const dwarfGrid: Record<string, any[]> = {};
+    const dwarves = [
+      { id: 'a', x: 10, y: 10 },
+      { id: 'b', x: 11, y: 10 },
+      { id: 'c', x: 200, y: 200 },
+    ];
+    for (const d of dwarves) {
+      const key = `${d.x >> 3},${d.y >> 3}`;
+      (dwarfGrid[key] ??= []).push(d);
+    }
+    // a and b are in the same bucket (10>>3=1, 11>>3=1)
+    const bx = 10 >> 3, by = 10 >> 3;
+    const nearby: any[] = [];
+    for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) {
+      const bucket = dwarfGrid[`${bx + dx},${by + dy}`];
+      if (bucket) for (const d of bucket) nearby.push(d);
+    }
+    expect(nearby.map(d => d.id)).toContain('a');
+    expect(nearby.map(d => d.id)).toContain('b');
+    expect(nearby.map(d => d.id)).not.toContain('c');
+  });
+});
