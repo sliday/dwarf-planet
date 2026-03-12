@@ -1050,7 +1050,7 @@ function aiBuild(d) {
       d.happiness = Math.min(100, d.happiness + 3);
     } else if (d.target.type === 'upgrade_road' && G.map[y][x] === T.ASPHALT && res.iron >= 3 && res.wood >= 2) {
       res.iron -= 3; res.wood -= 2; mapSet(x, y, T.RAILROAD); G.stats.built++; G.roadGraphDirty = true;
-      log(`${d.name} 🔲 upgraded to railroad!`, 'build', 3);
+      log(`${d.name} 🛤️ upgraded to railroad!`, 'build', 3);
       addEvent(d, 'build', 'Upgraded to railroad');
       d.happiness = Math.min(100, d.happiness + 5);
     }

@@ -13,7 +13,7 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - **Forest islands**: noise-based forest clusters naturally dot the plains for visual variety and wood sources
 - Terrain speed system with Dijkstra pathfinding (mountains = slow, roads = fast, spatial indexing for O(1) neighbor lookups)
 - Auto-generated roads between cities using A* (land-only, no ocean crossing)
-- 3-tier road system: gravel (🟫 1 stone) → asphalt (⬛ 2 stone + 1 iron) → railroad (🔲 3 iron + 2 wood), each progressively faster
+- 3-tier road system: gravel (🟫 1 stone) → asphalt (⬛ 2 stone + 1 iron) → railroad (🛤️ 3 iron + 2 wood), each progressively faster
 - **Road gap auto-repair**: dwarves detect broken single-lane roads (1-2 tile gaps) within 10 tiles and auto-fix them using 1 stone
 - **Persistent terrain**: all tile changes (builds, farms, roads, mines, designations) saved as deltas and restored on reload
 - **Loop Hero rendering**: adjacent same-type terrain tiles grouped into larger squares with scaled emojis (greedy cover, world-aligned for scroll stability)
