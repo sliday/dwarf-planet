@@ -1337,6 +1337,7 @@ function addCarry(d, resource, amount) {
 function depositCarry(d) {
   if (!d.carryItems || d.carrying <= 0) return;
   const res = cityOf(d).res;
+  if (!res) return;
   for (const [k, v] of Object.entries(d.carryItems)) {
     if (res[k] !== undefined) res[k] += v;
   }
@@ -1432,7 +1433,7 @@ function spawnDwarfAtCity(city) {
   const d = createDwarf(x, y, city.id);
   G.dwarves.push(d);
   log(`${d.name} has arrived at ${city.name}!`, 'system');
-  requestBackstory(d);
+  setTimeout(() => requestBackstory(d), Math.floor(Math.random() * 60000));
 }
 
 function spawnDwarf() {
@@ -1812,6 +1813,7 @@ function aiBuild(d) {
   if (d.timer >= dur) {
     const { x, y } = d.target;
     const res = cityOf(d).res;
+    if (!res) { d.state = 'idle'; d.target = null; return; }
     if (G.map[y][x] === T.D_BUILD && res.stone >= 2) {
       res.stone -= 2; G.map[y][x] = T.WALL; G.stats.built++;
       log(`${d.name} 🧱 built a wall`, 'build');
@@ -2296,7 +2298,7 @@ function trySeaSailing(d) {
 }
 
 function aiSeekFood(d) {
-  const res = cityOf(d).res;
+  const res = cityOf(d).res || { food: 0 };
   // Try wild food sources first: mushrooms, berries, crabs, fish
   const WILD_FOOD = new Set([T.MUSHROOM, T.BERRY_BUSH, T.CRAB]);
   const mp = bfs(d.x, d.y, (x, y) => WILD_FOOD.has(G.map[y][x]), true);
@@ -2320,7 +2322,7 @@ function aiSeekFood(d) {
 function aiEat(d) {
   d.timer++;
   if (d.timer >= 5) {
-    const res = cityOf(d).res;
+    const res = cityOf(d).res || { food: 0 };
     const src = d.target?.src;
     if (src === 'mushroom' || src === 'berry' || src === 'crab') {
       const { x, y } = d.target;
@@ -2385,15 +2387,17 @@ function tickSeason() {
     if (G.season === 0) {
       G.year++;
       // Age all dwarves
+      const deadIds = [];
       for (const d of G.dwarves) {
         d.age = (d.age || 20) + 1;
         // Ancient dwarves have a small death chance
         if (d.age >= 70 && Math.random() < 0.03 * (d.age - 69)) {
           log(`${d.name} \u2620\uFE0F passed away at age ${d.age}`, 'system');
           addEvent(d, 'death', `Died of old age at ${d.age}`);
-          G.dwarves = G.dwarves.filter(dw => dw.id !== d.id);
+          deadIds.push(d.id);
         }
       }
+      if (deadIds.length) G.dwarves = G.dwarves.filter(dw => !deadIds.includes(dw.id));
     }
     const name = SEASONS[G.season];
     log(`🌍 ${name} of Year ${G.year}`, 'system');
@@ -3751,9 +3755,11 @@ function gameLoop(ts) {
     let ticked = 0;
     while (tickAccum >= TICK && ticked < 10) {
       tickAccum -= TICK; G.tick++; ticked++;
-      for (const d of G.dwarves) tickDwarf(d);
-      tickShips();
-      tickSeason();
+      try {
+        for (const d of G.dwarves) tickDwarf(d);
+        tickShips();
+        tickSeason();
+      } catch (e) { console.error('Tick error:', e); }
       if (G.tick % 30 === 0) updateHUD();
     }
     if (ticked >= 10) tickAccum = 0;
