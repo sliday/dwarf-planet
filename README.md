@@ -19,6 +19,7 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - **Loop Hero rendering**: adjacent same-type terrain tiles grouped into larger squares with scaled emojis (greedy cover, world-aligned for scroll stability)
 - **Shore dithering**: ocean-beach edges get extended pixel dithering for natural coastline transitions
 - **Ocean waves**: animated blue shimmer on ocean tiles adjacent to shore, simulating gentle waves
+- **Road pulse**: connected road tiles glow with a traveling wave animation; disconnected segments stay static
 - **Named graves**: dwarves leave a randomized tombstone (🪦💀☠️⚰️🕯️) with their name permanently on the map; click to see who rests there
 - Per-city resources and culturally-named populations
 - Cities auto-expand when population and resources allow (beds, stockpiles, tables)
@@ -194,5 +195,5 @@ src/guardrails/        # Budget + rate limiting
 src/db/state.ts        # D1 state persistence
 migrations/            # D1 SQL migrations
 scripts/               # Import/seed scripts
-tests/                 # 20 test files, 338 tests
+tests/                 # 21 test files, 355 tests
 ```
