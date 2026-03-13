@@ -3884,7 +3884,8 @@ function render() {
                      d.state === 'eating' || d.state === 'going_eat' ? '🍖' :
                      d.state === 'building' ? '🔨' : d.state === 'farming' ? '🌱' :
                      d.state === 'hauling' ? '📦' : d.state === 'gathering' ? '🧺' :
-                     d.state === 'sailing' ? '⛵' : d.state === 'driving' ? (VEHICLE_EMOJIS[G.vehicles.find(v => v.driverId === d.id)?.type] || '🚗') : '🧔';
+                     d.state === 'sailing' ? '⛵' : d.state === 'driving' ? (VEHICLE_EMOJIS[G.vehicles.find(v => v.driverId === d.id)?.type] || '🚗') : d.state === 'riding' ? null : '🧔';
+      if (!dEmoji) continue; // riding — hidden inside vehicle
       try { ctx.drawImage(getEmojiImg(dEmoji), px, py); } catch (e) {}
       if (d.sponsored) {
         try { ctx.drawImage(getEmojiImg('⭐'), px + TILE / 2, py - 2); } catch (e) {}
@@ -3928,6 +3929,14 @@ function render() {
       const py = v.y * TILE - G.cam.y;
       if (px < -TILE || py < -TILE || px > w + TILE || py > h + TILE) continue;
       try { ctx.drawImage(getEmojiImg(VEHICLE_EMOJIS[v.type] || '\uD83D\uDE97'), px, py); } catch (e) {}
+      if (v.passengers?.length > 0) {
+        ctx.fillStyle = '#fbf1c7'; ctx.font = 'bold 7px monospace';
+        ctx.fillText(v.passengers.length.toString(), px + TILE - 5, py + 4);
+      }
+      if (v.mode === 'freight') {
+        ctx.fillStyle = '#d79921';
+        ctx.fillRect(px + TILE/2 - 1, py + TILE - 2, 3, 2);
+      }
       break;
     }
   }
@@ -4245,7 +4254,8 @@ function showVehicleInspector(vehicle) {
 
   const stLine = document.createElement('div');
   stLine.style.cssText = 'font-size:10px;color:#a89984;margin:4px 0';
-  stLine.textContent = 'State: ' + vehicle.state + (city ? ' | Home: ' + city.name : '');
+  const modeLabel = (vehicle.mode === 'trade' ? 'Trade' : vehicle.mode === 'freight' ? 'Freight' : 'Idle');
+  stLine.textContent = 'State: ' + vehicle.state + ' | Mode: ' + modeLabel + (city ? ' | Home: ' + city.name : '');
   frag.appendChild(stLine);
 
   const driver = vehicle.driverId ? G.dwarves.find(d => d.id === vehicle.driverId) : null;
@@ -4261,6 +4271,24 @@ function showVehicleInspector(vehicle) {
     noDriver.style.cssText = 'font-size:10px;color:#665c54;margin:2px 0';
     noDriver.textContent = '\uD83D\uDC64 No driver (parked)';
     frag.appendChild(noDriver);
+  }
+
+  if (vehicle.passengers?.length > 0) {
+    const paxLine = document.createElement('div');
+    paxLine.style.cssText = 'font-size:10px;color:#d5c4a1;margin:4px 0';
+    paxLine.textContent = '👥 Passengers: ' + vehicle.passengers.length;
+    frag.appendChild(paxLine);
+    for (const pid of vehicle.passengers) {
+      const p = G.dwarves.find(d => d.id === pid);
+      if (p) {
+        const pLink = document.createElement('div');
+        pLink.className = 'idwarf-link';
+        pLink.style.cssText = 'font-size:9px;color:' + p.color + ';margin-left:8px;cursor:pointer';
+        pLink.textContent = '  ' + p.name;
+        pLink.onclick = () => showDwarfInspector(p);
+        frag.appendChild(pLink);
+      }
+    }
   }
 
   const cargoTotal = vehicle.cargoTotal || 0;
