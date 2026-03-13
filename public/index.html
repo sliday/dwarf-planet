@@ -49,7 +49,7 @@
     100% { width: 95%; }
   }
 
-  #game-canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; }
+  #game-canvas { position: absolute; top: 0; left: 0; image-rendering: pixelated; touch-action: none; }
 
   .hud-top {
     position: absolute; top: 0; left: 0; right: 0;
@@ -213,6 +213,8 @@
   }
   .mobile .controls .section-label { display: none; }
   .mobile .speed-slider-row { flex: 1 1 100%; margin-bottom: 4px; }
+  .mobile .ctrl-slider::-webkit-slider-thumb { width: 28px; height: 28px; }
+  .mobile .ctrl-slider::-moz-range-thumb { width: 28px; height: 28px; }
   .mobile .action-btn {
     min-width: 44px; min-height: 44px; font-size: 18px; padding: 8px;
     display: flex; align-items: center; justify-content: center;
@@ -232,15 +234,20 @@
     border-radius: 12px 12px 0 0; border: none; border-top: 1px solid #504945;
     transform: translateY(100%); transition: transform 0.3s ease;
     display: block !important;
+    padding-bottom: env(safe-area-inset-bottom);
+    font-size: 12px;
   }
   .mobile .inspector-panel.open { transform: translateY(0); }
   .mobile .insp-header { cursor: default; }
+  .mobile .insp-close { width: 44px; height: 44px; display: flex; align-items: center; justify-content: center; font-size: 22px; }
+  .mobile .insp-body div[style*="cursor:pointer"], .mobile .insp-body div[onclick] { padding-top: 8px; padding-bottom: 8px; }
   .insp-drag-handle { display: none; }
   .mobile .insp-drag-handle {
     display: block; width: 40px; height: 5px; border-radius: 3px; background: #665c54;
-    margin: 6px auto 2px; cursor: grab;
+    margin: 0 auto; cursor: grab; padding: 20px 0; background-clip: content-box;
   }
 
+  .mobile .pop-sort-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 4px; }
   .mobile .minimap { width: 100px; height: 50px; opacity: 0.7; }
   @media (max-width: 430px) { .mobile .minimap { display: none; } }
 
@@ -255,6 +262,7 @@
   #year-banner .res-line { padding: 2px 0; color: #a89984; font-size: 11px; }
   #year-banner .res-line .emoji { margin-right: 4px; }
 
+  .mobile .db-modal { max-width: 90vw !important; }
   .mobile .status-bar { display: none; }
 
   .mobile-cancel-btn { display: none; }
@@ -4021,8 +4029,10 @@ function openInspector(tile) {
     else if (city) showCityInspector(city);
     else showTerrainInspector(tile);
   }
-  if (isMobile) inspPanel.classList.add('open');
-  else inspPanel.style.display = 'block';
+  if (isMobile) {
+    inspPanel.classList.add('open');
+    document.querySelector('.event-log')?.classList.add('collapsed');
+  } else inspPanel.style.display = 'block';
 }
 
 function showAnimalInspector(animal) {
@@ -5289,6 +5299,7 @@ function showPopulationPanel() {
 
   // Sort buttons
   const sortBar = document.createElement('div');
+  sortBar.className = 'pop-sort-bar';
   sortBar.style.cssText = 'display:flex;gap:2px;margin-bottom:6px;flex-wrap:wrap';
   const sorts = [['name','Name'],['state','State'],['hunger','🍖'],['energy','⚡'],['happiness','😊'],['hp','❤️'],['age','Age'],['city','City']];
   for (const [key, label] of sorts) {

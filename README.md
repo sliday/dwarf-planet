@@ -100,9 +100,10 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - Footer shows full season + year (e.g. "Autumn, Year 16")
 - Clickable minimap: click/tap to jump camera to any location on desktop and mobile
 - Splash screen for new visitors + in-game mechanics guide
-- Full mobile support: touch pan, pinch-to-zoom (0.75x–3.0x), tap-to-inspect
-- Responsive layout: bottom sheet inspector, collapsible event log, thumb-zone toolbar
-- iOS safe area support, 44px touch targets, designation mode with cancel button
+- Full mobile support: touch pan, pinch-to-zoom (0.75x–3.0x), tap-to-inspect, `touch-action: none` prevents browser gesture interference
+- Responsive layout: bottom sheet inspector (12px readable text), collapsible event log (auto-collapses when inspector opens), thumb-zone toolbar
+- iOS safe area support, 44px touch targets (close button, slider thumb, drag handle, clickable rows), designation mode with cancel button
+- Population sort buttons wrap into 4-column grid on mobile; modals capped at 90vw
 
 ### Performance
 - BFS pathfinding capped at 2000 steps (covers ~44x44 area)
