@@ -920,7 +920,7 @@ const G = {
   animals: [],
   stats: { mined: 0, built: 0, farmed: 0 },
   mapDeltas: {},
-  graves: {}, yearResolutions: [],
+  graves: {}, yearResolutions: [], suburbs: [],
   cam: { x: 0, y: 0 },
   mode: 'normal', drag: null, sel: null,
   hovTile: null, mapDirty: true,
@@ -948,7 +948,7 @@ if (isMobile) { document.body.classList.add('mobile'); G.zoom = 1.5; }
 let gameWorker = null, workerActive = false;
 
 // Helper: find city by id
-function cityById(id) { return CITIES.find(c => c.id === id); }
+function cityById(id) { return CITIES.find(c => c.id === id) || G.suburbs?.find(s => s.id === id); }
 function cityOf(d) { return cityById(d.cityId) || CITIES[0]; }
 function nearestCity(x, y) {
   let best = null, bestDist = Infinity;
@@ -3746,6 +3746,26 @@ function render() {
     }
   }
 
+  // Draw suburb labels
+  ctx.font = '9px sans-serif';
+  for (const sub of (G.suburbs || [])) {
+    const px = sub.mx * TILE - G.cam.x + TILE / 2;
+    const py = sub.my * TILE - G.cam.y - 4;
+    const px2 = (sub.mx + MAP_W) * TILE - G.cam.x + TILE / 2;
+    const px3 = (sub.mx - MAP_W) * TILE - G.cam.x + TILE / 2;
+    for (const cpx of [px, px2, px3]) {
+      if (cpx > -100 && cpx < w + 100 && py > -20 && py < h + 20) {
+        ctx.fillStyle = 'rgba(29,32,33,0.5)';
+        const label = sub.emoji + ' ' + sub.name;
+        if (!sub._labelWidth) sub._labelWidth = ctx.measureText(label).width;
+        ctx.fillRect(cpx - sub._labelWidth / 2 - 2, py - 11, sub._labelWidth + 4, 13);
+        ctx.fillStyle = '#d5c4a1';
+        ctx.fillText(label, cpx, py);
+        break;
+      }
+    }
+  }
+
   // Draw dwarves
   const VEHICLE_EMOJIS = { cart:'\uD83D\uDC34', car:'\uD83D\uDE97', train:'\uD83D\uDE82' };
   for (const d of G.dwarves) {
@@ -5842,6 +5862,7 @@ function initWorker() {
             if (city) city.res = cd.res;
           }
         }
+        if (data.suburbs) G.suburbs = data.suburbs;
         // Display buffered logs
         for (const l of data.logs) log(l.msg, l.type, l.rarity, l.season, l.cityEmoji, l.lx, l.ly);
         // Show buffered toasts

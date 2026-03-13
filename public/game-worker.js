@@ -128,7 +128,7 @@ const G = {
   dwarves:[], usedNames:new Set(),
   animals:[], animalGrid:{},
   ships:[], vehicles:[], stats:{mined:0,built:0,farmed:0},
-  graves:{}, yearResolutions:[],
+  graves:{}, yearResolutions:[], suburbs:[],
   homeCity:null, aiCityIndex:0, dwarfGrid:{},
   mapDeltas:{},
 };
@@ -151,7 +151,7 @@ function placeGrave(d, cause) {
 // Helpers
 function wrapX(x) { return ((x % MAP_W) + MAP_W) % MAP_W; }
 function wrapY(y) { return ((y % MAP_H) + MAP_H) % MAP_H; }
-function cityById(id) { return CITIES.find(c => c.id === id); }
+function cityById(id) { return CITIES.find(c => c.id === id) || G.suburbs.find(s => s.id === id); }
 function cityOf(d) { return cityById(d.cityId) || CITIES[0]; }
 function nearestCity(x, y) {
   let best = null, bestDist = Infinity;
@@ -165,6 +165,52 @@ function nearestCity(x, y) {
   return best;
 }
 function defaultRes() { return {stone:0,wood:0,food:50,iron:0,gold:0,cloth:0,ale:0,herbs:0,beds:0,tables:0}; }
+
+function createSuburb(x, y, parentCityId, founderName) {
+  const parent = cityById(parentCityId);
+  return {
+    id: 'suburb_' + Math.random().toString(36).slice(2, 8),
+    parentCityId,
+    culture: parent?.culture || 'american',
+    name: founderName.split(' ')[1] + ' Homestead',
+    emoji: '🏠',
+    mx: x, my: y,
+    res: defaultRes(),
+    foundedSeason: G.season + G.year * 4,
+  };
+}
+
+function checkSuburbPromotion() {
+  const BUILDING_TILES = new Set([T.BED, T.STOCKPILE, T.TABLE, T.FLOOR, T.FACTORY]);
+  for (let i = G.suburbs.length - 1; i >= 0; i--) {
+    const sub = G.suburbs[i];
+    const age = (G.season + G.year * 4) - sub.foundedSeason;
+    if (age < 2) continue;
+    let buildings = 0;
+    for (let dy = -3; dy <= 3; dy++)
+      for (let dx = -3; dx <= 3; dx++) {
+        const x = wrapX(sub.mx + dx), y = sub.my + dy;
+        if (y >= 0 && y < MAP_H && BUILDING_TILES.has(G.map[y][x])) buildings++;
+      }
+    if (buildings < 3) continue;
+    const residents = G.dwarves.filter(d => d.cityId === sub.id).length;
+    if (residents < 2) continue;
+    if (CITIES.length >= 60) continue;
+    mapSet(sub.mx, sub.my, T.CITY);
+    const cityName = sub.name.replace(' Homestead', 'burg');
+    const newCity = {
+      id: sub.id, name: cityName, emoji: '🏘️',
+      lon: 0, lat: 0,
+      culture: sub.culture,
+      mx: sub.mx, my: sub.my,
+      res: {...sub.res},
+    };
+    CITIES.push(newCity);
+    G.suburbs.splice(i, 1);
+    G.roadGraphDirty = true;
+    log(`🏘️ ${cityName} has grown into a town!`, 'system', 5, null, sub.mx, sub.my);
+  }
+}
 
 // Pathfinding
 function isWalkable(x, y) {
@@ -886,6 +932,8 @@ function aiIdle(d) {
   if (Math.random() < 0.005 && (d.carrying||0) >= carryCapacity(d)) {
     if (tryFoundCity(d)) return;
   }
+  if (Math.random() < 0.01 && tryFoundSuburb(d)) return;
+  if (Math.random() < 0.02 && tryRelocateToSuburb(d)) return;
   if (Math.random() < 0.02 && (d.ambition ?? 50) > 60) {
     if (trySeaSailing(d)) return;
   }
@@ -1563,6 +1611,89 @@ function tryFoundCity(d) {
   return true;
 }
 
+function tryFoundSuburb(d) {
+  const parentCity = cityOf(d);
+  if (!parentCity || !parentCity.res || parentCity.mx === undefined) return false;
+  const cityPop = G.dwarves.filter(o => o.cityId === parentCity.id).length;
+  if (cityPop < 6) return false;
+  const hasChild = G.dwarves.some(o => o !== d && o.cityId === d.cityId && (o.age ?? 20) < 10);
+  if (!hasChild) return false;
+  if (CITIES.length + G.suburbs.length >= 60) return false;
+  const ROAD_TILES = new Set([T.PATH, T.ROAD, T.ASPHALT, T.RAILROAD]);
+  let onRoad = false;
+  for (let dy = -1; dy <= 1 && !onRoad; dy++)
+    for (let dx = -1; dx <= 1 && !onRoad; dx++) {
+      const rx = wrapX(d.x + dx), ry = d.y + dy;
+      if (ry >= 0 && ry < MAP_H && ROAD_TILES.has(G.map[ry][rx])) onRoad = true;
+    }
+  if (!onRoad) return false;
+  const distParent = Math.min(Math.abs(parentCity.mx - d.x), MAP_W - Math.abs(parentCity.mx - d.x)) + Math.abs(parentCity.my - d.y);
+  if (distParent < 8 || distParent > 20) return false;
+  for (const c of CITIES) {
+    if (c.mx === undefined) continue;
+    const dx = Math.min(Math.abs(c.mx - d.x), MAP_W - Math.abs(c.mx - d.x));
+    const dy = Math.abs(c.my - d.y);
+    if (dx + dy < 8) return false;
+  }
+  for (const s of G.suburbs) {
+    const dx = Math.min(Math.abs(s.mx - d.x), MAP_W - Math.abs(s.mx - d.x));
+    const dy = Math.abs(s.my - d.y);
+    if (dx + dy < 8) return false;
+  }
+  let land = 0;
+  for (let dy = -1; dy <= 1; dy++)
+    for (let dx = -1; dx <= 1; dx++) {
+      const x = wrapX(d.x + dx), y = d.y + dy;
+      if (y >= 0 && y < MAP_H && G.map[y][x] !== T.OCEAN && G.map[y][x] !== T.FISH_SPOT) land++;
+    }
+  if (land < 5) return false;
+  if (parentCity.res.food < 10 || parentCity.res.stone < 3 || parentCity.res.wood < 2) return false;
+  parentCity.res.food -= 8; parentCity.res.stone -= 3; parentCity.res.wood -= 2;
+  const sub = createSuburb(d.x, d.y, parentCity.id, d.name);
+  sub.res.food = 8; sub.res.stone = 3; sub.res.wood = 2; sub.res.beds = 1;
+  G.suburbs.push(sub);
+  mapSet(d.x, d.y, T.BED);
+  for (const [dx2, dy2] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+    const ax = wrapX(d.x + dx2), ay = d.y + dy2;
+    if (ay >= 0 && ay < MAP_H && WALKABLE.has(G.map[ay][ax]) && G.map[ay][ax] !== T.BED && G.map[ay][ax] !== T.CITY) {
+      mapSet(ax, ay, T.FLOOR); break;
+    }
+  }
+  const oldCityId = d.cityId;
+  d.cityId = sub.id; d.state = 'idle'; d.target = null; d.path = [];
+  const child = G.dwarves.find(o => o.cityId === oldCityId && (o.age ?? 20) < 10);
+  if (child) child.cityId = sub.id;
+  log(`🏠 ${d.name} built a homestead near ${parentCity.name}!`, 'system', 4, null, d.x, d.y);
+  return true;
+}
+
+function tryRelocateToSuburb(d) {
+  const parentCity = cityOf(d);
+  if (!parentCity || !parentCity.res) return false;
+  const cityPop = G.dwarves.filter(o => o.cityId === d.cityId).length;
+  if (cityPop < 7) return false;
+  const child = G.dwarves.find(o => o !== d && o.cityId === d.cityId && (o.age ?? 20) < 10);
+  if (!child) return false;
+  for (const sub of G.suburbs) {
+    if (sub.culture !== (parentCity.culture || 'american')) continue;
+    const dx = Math.min(Math.abs(sub.mx - d.x), MAP_W - Math.abs(sub.mx - d.x));
+    const dy = Math.abs(sub.my - d.y);
+    if (dx + dy > 25) continue;
+    const subPop = G.dwarves.filter(o => o.cityId === sub.id).length;
+    if (subPop >= 3) continue;
+    d.target = {type:'relocate_suburb', x:sub.mx, y:sub.my, suburbId:sub.id};
+    const p = findPath(d.x, d.y, sub.mx, sub.my);
+    if (!p || p.length === 0) continue;
+    d.path = p; d.state = 'walk';
+    const oldCityId = d.cityId;
+    d.cityId = sub.id;
+    child.cityId = sub.id;
+    log(`🏠 ${d.name} relocated to ${sub.name}`, 'system', 2, null, sub.mx, sub.my);
+    return true;
+  }
+  return false;
+}
+
 function trySeaSailing(d) {
   if (G.ships.length >= 50) return false;
   const city = cityOf(d);
@@ -1928,12 +2059,13 @@ function tickSeason() {
     const name = SEASONS[G.season];
     log(`🌍 ${name} of Year ${G.year}`, 'system', 3);
 
-    // Reproduction: one birth per city per season
-    for (const city of CITIES) {
+    // Reproduction: one birth per city/suburb per season
+    for (const city of [...CITIES, ...G.suburbs]) {
       if (!city.res || city.mx === undefined) continue;
       const cityDwarves = G.dwarves.filter(d => d.cityId === city.id);
       const cityPop = cityDwarves.length;
-      if (cityPop >= 10 || G.dwarves.length >= 300) continue;
+      const popCap = city.id?.startsWith('suburb_') ? 4 : 10;
+      if (cityPop >= popCap || G.dwarves.length >= 300) continue;
       if (city.res.food < cityPop * 3) continue;
       const males = cityDwarves.filter(d => d.sex === 'M' && d.happiness >= 70 && d.age >= 20 && d.age < 55);
       const females = cityDwarves.filter(d => d.sex === 'F' && d.happiness >= 70 && d.age >= 20 && d.age < 55);
@@ -1949,7 +2081,7 @@ function tickSeason() {
     }
 
     if (G.season === 0 || G.season === 1) {
-      for (const city of CITIES) {
+      for (const city of [...CITIES, ...G.suburbs]) {
         if (!city.res || city.mx === undefined) continue;
         let farmCount=0, fishCount=0, berryCount=0, herbCount=0;
         const r = 15;
@@ -1971,7 +2103,7 @@ function tickSeason() {
       }
       log(`🌾 Harvest season! Cities gather from farms, fisheries, and foraging.`, 'farm', 3);
 
-      for (const city of CITIES) {
+      for (const city of [...CITIES, ...G.suburbs]) {
         if (!city.res || city.mx === undefined) continue;
         const cityPop = G.dwarves.filter(d => d.cityId === city.id).length;
         const r = city.res;
@@ -2004,6 +2136,9 @@ function tickSeason() {
           if (expanded > 0) log(`🏘️ ${city.name} expanded! (+${expanded} structures)`, 'city', 4, null, city.mx, city.my);
         }
       }
+
+      // Check suburb promotions
+      checkSuburbPromotion();
 
       // Auto-place factories at eligible cities
       for (const city of CITIES) {
@@ -2282,6 +2417,7 @@ function getSerializableState() {
     mapDeltas:G.mapDeltas,
     graves:G.graves,
     yearResolutions:G.yearResolutions,
+    suburbs:G.suburbs,
   };
 }
 
@@ -2313,6 +2449,7 @@ self.onmessage = function(e) {
       G.mapDeltas = data.state?.mapDeltas || {};
       G.graves = data.state?.graves || {};
       G.yearResolutions = data.state?.yearResolutions || [];
+      G.suburbs = data.state?.suburbs || [];
       // Restore dwarf paths/targets to empty (they were stripped for transfer)
       for (const d of G.dwarves) {
         if (!d.path) d.path = [];
@@ -2405,6 +2542,7 @@ self.onmessage = function(e) {
           }
         }
       }
+      G.suburbs = saved.suburbs || [];
       // Ensure min population
       for (const city of CITIES) {
         if (city.mx === undefined) continue;
@@ -2474,6 +2612,7 @@ function startTickLoop() {
         pathLength:v.path?.length||0,
       })),
       cities:CITIES.filter(c => c.res).map(c => ({id:c.id,res:{...c.res},mx:c.mx,my:c.my,name:c.name,emoji:c.emoji})),
+      suburbs:G.suburbs.map(s => ({id:s.id,name:s.name,emoji:s.emoji,mx:s.mx,my:s.my,parentCityId:s.parentCityId,culture:s.culture,res:{...s.res}})),
       logs:pendingLogs.splice(0),
       toasts:pendingToasts.splice(0),
       mapChanges:pendingMapChanges.splice(0),

@@ -27,6 +27,7 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - **Named graves**: dwarves leave a randomized tombstone (🪦💀☠️⚰️🕯️) with their name permanently on the map; click to see who rests there
 - Per-city resources and culturally-named populations
 - Cities auto-expand when population and resources allow (beds, stockpiles, tables)
+- **Suburbia system**: dwarves with families in crowded cities (pop ≥ 6) build homesteads along roads 8-20 tiles away; suburbs have 4-pop cap, participate in harvest/expansion cycles, and promote to full cities (🏘️) after 2+ seasons with 3+ buildings and 2+ residents; dwarves with children relocate to under-populated suburbs automatically
 
 ### Dwarves
 - Up to 300 autonomous dwarves with D&D stats (STR/DEX/CON/INT/WIS/CHA)
