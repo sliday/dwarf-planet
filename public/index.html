@@ -443,6 +443,7 @@
 const TILE = 20;
 const MAP_W = 2000;
 const MAP_H = 1000;
+function fmtN(n) { return Math.floor(n).toLocaleString('en-US'); }
 
 // Tile types
 const T = {
@@ -988,28 +989,49 @@ function getEmojiImg(emoji, size = 1) {
   return c;
 }
 
-// Railroad emoji cache (rotated 90° 🟰 on transparent bg)
+// Railroad sprite cache (mask-keyed)
 const railCache = {};
-function getRailImg(size = 1) {
-  if (railCache[size]) return railCache[size];
-  const s = size * TILE;
+function getRailImg(mask) {
+  if (mask === undefined) mask = 15;
+  const key = 'rail|' + mask;
+  if (railCache[key]) return railCache[key];
+  const s = TILE;
   const c = document.createElement('canvas');
   c.width = s; c.height = s;
   const cx = c.getContext('2d');
-  cx.font = `bold ${s - 2}px monospace`;
-  cx.textAlign = 'center';
-  cx.textBaseline = 'middle';
-  cx.fillStyle = '#888';
-  cx.fillText('#', s / 2, s / 2 + 1);
-  railCache[size] = c;
+  const mid = s / 2;
+  const hw = 4, bw = 5;
+  function strip(color, halfW) {
+    cx.fillStyle = color;
+    cx.fillRect(mid - halfW, mid - halfW, halfW * 2 + 1, halfW * 2 + 1);
+    if (mask & 1) cx.fillRect(mid - halfW, 0, halfW * 2 + 1, mid);
+    if (mask & 2) cx.fillRect(mid, mid - halfW, mid, halfW * 2 + 1);
+    if (mask & 4) cx.fillRect(mid - halfW, mid, halfW * 2 + 1, mid);
+    if (mask & 8) cx.fillRect(0, mid - halfW, mid + 1, halfW * 2 + 1);
+  }
+  strip('#5a5040', bw);
+  strip('#7a7060', hw);
+  // Cross-ties
+  cx.fillStyle = '#8a6a4a';
+  if (mask & 1) { for (let y = 2; y < mid; y += 5) cx.fillRect(mid - hw, y, hw * 2 + 1, 2); }
+  if (mask & 4) { for (let y = mid + 1; y < s - 1; y += 5) cx.fillRect(mid - hw, y, hw * 2 + 1, 2); }
+  if (mask & 2) { for (let x = mid + 1; x < s - 1; x += 5) cx.fillRect(x, mid - hw, 2, hw * 2 + 1); }
+  if (mask & 8) { for (let x = 2; x < mid; x += 5) cx.fillRect(x, mid - hw, 2, hw * 2 + 1); }
+  // Steel rails
+  cx.fillStyle = '#b0b0b0';
+  const ro = 2;
+  if (mask & 1) { cx.fillRect(mid - ro, 0, 1, mid); cx.fillRect(mid + ro, 0, 1, mid); }
+  if (mask & 4) { cx.fillRect(mid - ro, mid, 1, mid); cx.fillRect(mid + ro, mid, 1, mid); }
+  if (mask & 2) { cx.fillRect(mid, mid - ro, mid, 1); cx.fillRect(mid, mid + ro, mid, 1); }
+  if (mask & 8) { cx.fillRect(0, mid - ro, mid + 1, 1); cx.fillRect(0, mid + ro, mid + 1, 1); }
+  railCache[key] = c;
   return c;
 }
 
-// Road direction rendering — draw line segments based on neighbor connections
+// Road direction rendering — Transport Tycoon style road sprites
 const ROAD_TYPES = new Set([T.PATH, T.ROAD, T.ASPHALT, T.RAILROAD, T.CITY, T.FACTORY, T.D_ROAD]);
 const roadDirCache = {};
 function getRoadDirImg(t, mask) {
-  // mask: N=1, E=2, S=4, W=8
   const key = t + '|' + mask;
   if (roadDirCache[key]) return roadDirCache[key];
   const s = TILE;
@@ -1017,28 +1039,36 @@ function getRoadDirImg(t, mask) {
   c.width = s; c.height = s;
   const cx = c.getContext('2d');
   const mid = s / 2;
-  // Road line style per type
-  let lw, color;
-  if (t === T.PATH) { lw = 4; color = '#b0a080'; }
-  else if (t === T.ROAD) { lw = 6; color = '#c8b888'; }
-  else if (t === T.ASPHALT) { lw = 7; color = '#808080'; }
-  else { lw = 4; color = '#b0a080'; }
-  cx.strokeStyle = color;
-  cx.lineWidth = lw;
-  cx.lineCap = 'round';
-  cx.beginPath();
-  // If no connections or isolated, draw a dot
-  if (mask === 0) {
-    cx.arc(mid, mid, lw / 2, 0, Math.PI * 2);
+  let w, surf, bord;
+  if (t === T.PATH)         { w = 5;  surf = '#c4b088'; bord = '#8a7a5a'; }
+  else if (t === T.ROAD)    { w = 7;  surf = '#d4c498'; bord = '#9a8a6a'; }
+  else if (t === T.ASPHALT) { w = 9;  surf = '#5a5a5a'; bord = '#3a3a3a'; }
+  else                      { w = 5;  surf = '#c4b088'; bord = '#8a7a5a'; }
+  const hw = Math.floor(w / 2);
+  const bw = hw + 1;
+  function strip(color, halfW) {
     cx.fillStyle = color;
-    cx.fill();
-  } else {
-    // Draw lines from center to each connected edge
-    if (mask & 1) { cx.moveTo(mid, mid); cx.lineTo(mid, 0); }    // N
-    if (mask & 2) { cx.moveTo(mid, mid); cx.lineTo(s, mid); }    // E
-    if (mask & 4) { cx.moveTo(mid, mid); cx.lineTo(mid, s); }    // S
-    if (mask & 8) { cx.moveTo(mid, mid); cx.lineTo(0, mid); }    // W
-    cx.stroke();
+    cx.fillRect(mid - halfW, mid - halfW, halfW * 2 + 1, halfW * 2 + 1);
+    if (mask & 1) cx.fillRect(mid - halfW, 0, halfW * 2 + 1, mid);
+    if (mask & 2) cx.fillRect(mid, mid - halfW, mid, halfW * 2 + 1);
+    if (mask & 4) cx.fillRect(mid - halfW, mid, halfW * 2 + 1, mid);
+    if (mask & 8) cx.fillRect(0, mid - halfW, mid + 1, halfW * 2 + 1);
+  }
+  strip(bord, bw);
+  strip(surf, hw);
+  // ASPHALT: yellow center dashes on straight sections
+  if (t === T.ASPHALT && (mask === 5 || mask === 10)) {
+    cx.fillStyle = '#c8a832';
+    if (mask === 5) { for (let y = 1; y < s; y += 5) cx.fillRect(mid, y, 1, 3); }
+    else { for (let x = 1; x < s; x += 5) cx.fillRect(x, mid, 3, 1); }
+  }
+  // ROAD: subtle gravel dots
+  if (t === T.ROAD) {
+    cx.fillStyle = '#b8a880';
+    for (let i = 0; i < 4; i++) {
+      const dx = mid + ((i * 7 + 3) % w) - hw, dy = mid + ((i * 5 + 2) % w) - hw;
+      cx.fillRect(dx, dy, 1, 1);
+    }
   }
   roadDirCache[key] = c;
   return c;
@@ -3508,7 +3538,7 @@ function patchTile(gx, gy) {
   tileBufferCtx.fillRect(px, py, TILE, TILE);
   ditherEdges(tileBufferCtx, px, py, wx, wy);
   if (t === T.RAILROAD) {
-    try { tileBufferCtx.drawImage(getRailImg(), px, py); } catch (e) {}
+    try { tileBufferCtx.drawImage(getRailImg(roadMask(wx, wy)), px, py); } catch (e) {}
   } else if (t === T.PATH || t === T.ROAD || t === T.ASPHALT) {
     try { tileBufferCtx.drawImage(getRoadDirImg(t, roadMask(wx, wy)), px, py); } catch (e) {}
   } else {
@@ -3613,7 +3643,8 @@ function renderTileBuffer(startGX, startGY, endGX, endGY) {
 
       // Draw emoji
       if (t === T.RAILROAD) {
-        try { tileBufferCtx.drawImage(getRailImg(bestN), px, py); } catch (e) {}
+        const rwx = wrapX(startGX + c), rwy = wrapY(startGY + r);
+        try { tileBufferCtx.drawImage(getRailImg(roadMask(rwx, rwy)), px, py); } catch (e) {}
       } else if ((t === T.PATH || t === T.ROAD || t === T.ASPHALT) && bestN === 1) {
         const rwx = wrapX(startGX + c), rwy = wrapY(startGY + r);
         try { tileBufferCtx.drawImage(getRoadDirImg(t, roadMask(rwx, rwy)), px, py); } catch (e) {}
@@ -3995,7 +4026,7 @@ function getTemperature(lat, season) {
 }
 
 function updateHUD() {
-  document.getElementById('h-pop').textContent = G.dwarves.length;
+  document.getElementById('h-pop').textContent = fmtN(G.dwarves.length);
   document.getElementById('h-year').textContent = G.year;
   document.getElementById('sb-season').textContent = SEASONS[G.season] + ', Year ' + G.year;
 
@@ -4019,7 +4050,7 @@ function updateHUD() {
     for (const [icon, key] of RES_ICONS) {
       const span = document.createElement('span');
       span.title = RES_NAMES[key];
-      span.textContent = icon + (r[key] ?? 0) + ' ';
+      span.textContent = icon + fmtN(r[key] ?? 0) + ' ';
       span.style.cursor = 'pointer';
       span.onclick = (e) => { e.stopPropagation(); showResourceRanking(key); };
       resEl.appendChild(span);
@@ -4512,14 +4543,14 @@ function showCityInspector(city) {
   const resDiv = document.createElement('div'); resDiv.className = 'ires';
   for (const [icon, key] of RES_ICONS) {
     const span = document.createElement('span'); span.className = 'ires-item'; span.title = RES_NAMES[key]; span.textContent = icon + ' ';
-    const rv = document.createElement('span'); rv.className = 'rv'; rv.textContent = r[key] ?? 0;
+    const rv = document.createElement('span'); rv.className = 'rv'; rv.textContent = fmtN(r[key] ?? 0);
     span.appendChild(rv); resDiv.appendChild(span);
   }
   frag.appendChild(resDiv);
 
   const popSection = document.createElement('div'); popSection.style.cssText = 'margin-top:6px;border-top:1px solid #3c3836;padding-top:4px';
   const popLabel = document.createElement('div'); popLabel.style.cssText = 'font-size:10px;color:#a89984;margin-bottom:2px';
-  popLabel.textContent = 'Population (' + pop.length + ')'; popSection.appendChild(popLabel);
+  popLabel.textContent = 'Population (' + fmtN(pop.length) + ')'; popSection.appendChild(popLabel);
   for (const dw of pop) {
     const link = document.createElement('div'); link.className = 'idwarf-link'; link.style.color = dw.color;
     link.textContent = dw.name + ' (' + dw.state + ')'; link.onclick = () => showDwarfInspector(dw);
@@ -4576,7 +4607,7 @@ function showTerrainInspector(tile) {
       lbl.textContent = 'Top cities by ' + resKey; sec.appendChild(lbl);
       for (const c of ranked) {
         const row = document.createElement('div'); row.style.cssText = 'font-size:10px;color:#d5c4a1;cursor:pointer';
-        row.textContent = (c.emoji || '') + ' ' + c.name + ': ' + Math.floor(c.res[resKey] || 0);
+        row.textContent = (c.emoji || '') + ' ' + c.name + ': ' + fmtN(c.res[resKey] || 0);
         row.onclick = () => { G.cam.x = c.mx * TILE - canvas.width / 2; G.cam.y = c.my * TILE - canvas.height / 2; showCityInspector(c); };
         sec.appendChild(row);
       }
@@ -4596,7 +4627,7 @@ function showResourceRanking(resKey) {
   if (ranked.length) {
     for (const c of ranked) {
       const row = document.createElement('div'); row.style.cssText = 'font-size:11px;color:#d5c4a1;cursor:pointer;padding:1px 0';
-      row.textContent = (c.emoji || '') + ' ' + c.name + ': ' + Math.floor(c.res[resKey] || 0);
+      row.textContent = (c.emoji || '') + ' ' + c.name + ': ' + fmtN(c.res[resKey] || 0);
       row.onclick = () => { G.cam.x = c.mx * TILE - canvas.width / 2; G.cam.y = c.my * TILE - canvas.height / 2; showCityInspector(c); };
       frag.appendChild(row);
     }
