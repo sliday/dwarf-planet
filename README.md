@@ -94,7 +94,7 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - City ideology labels computed from aggregate personality (Militant, Spiritual, Mercantile, etc.)
 - Contextual Mine/Build/Farm/Road designation buttons with drag-to-designate
 - Speed slider (⏸ → 1x → 2x → 5x) for simulation speed control
-- Event log with season emoji timestamps (🌱☀️🍂❄️) and rarity filter with consecutive entry collapsing (×N); **all dwarf names and city names are clickable** (jump camera to subject); all city events include coordinates
+- Event log with season emoji timestamps (🌱☀️🍂❄️) and rarity filter with consecutive entry collapsing (×N); **all log entries are clickable** — click any event to jump camera to where it happened; dwarf names and city names are individually linkified; hover highlights clickable entries
 - **Temperature tinting**: HUD and status bar shift warm amber → cool blue based on camera latitude and season
 - **Year resolutions banner**: each new year shows per-city goals (farming, expansion, crafting) based on population stats
 - **Graveyard panel**: click fallen count in Year panel to browse all graves; each grave shows cause of death, age, home city, and an AI-generated epitaph (gemini-3.1-flash-lite)
