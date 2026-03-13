@@ -76,6 +76,9 @@ AI-powered civilization simulator. Autonomous dwarves make decisions using tiere
 - **Trains** 🚂: require railroad tiles; highest capacity bulk transport between connected cities
 - **Factories** 🏭: auto-placed near cities with sufficient iron; produce cars once per year
 - Dwarves auto-select the best available vehicle for trade routes
+- **Passenger transport**: idle dwarves can board passing vehicles for faster travel to other cities; passengers disembark at their destination or ride to the end of the route
+- **Autonomous freight**: parked vehicles without drivers autonomously shuttle surplus resources from cities with abundance to cities with shortages, balancing the economy
+- Vehicle inspector shows mode (Trade/Freight/Idle) and clickable passenger list
 
 ### Ships & Sea Travel
 - Coastal cities start with 2 ships; up to 50 ships globally
@@ -144,14 +147,14 @@ Pay to upgrade a dwarf's AI reasoning tier via Polar.sh. Sponsored dwarves get a
 - **AI:** OpenRouter via Vercel AI SDK v6 + Zod v4 schemas
 - **Payments:** Polar.sh (@polar-sh/sdk)
 - **Frontend:** Vanilla JS canvas + DAUB UI (grunge theme)
-- **Tests:** Vitest (388 tests across 22 files)
+- **Tests:** Vitest (405 tests across 23 files)
 
 ## Development
 
 ```bash
 npm install
 npm run dev              # local dev server
-npm test                 # run 388 tests
+npm test                 # run 405 tests
 npm run test:watch       # vitest watch mode
 npm run db:migrate:local # apply D1 migrations locally
 npm run db:migrate:remote # apply D1 migrations to production
@@ -205,5 +208,5 @@ src/guardrails/        # Budget + rate limiting
 src/db/state.ts        # D1 state persistence
 migrations/            # D1 SQL migrations
 scripts/               # Import/seed scripts
-tests/                 # 22 test files, 388 tests
+tests/                 # 23 test files, 405 tests
 ```
