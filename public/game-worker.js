@@ -307,7 +307,7 @@ function bfsWater(sx, sy, goalFn) {
   const par = new Map();
   const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
   let steps = 0;
-  while (queue.length > 0 && steps < 6000) {
+  while (queue.length > 0 && steps < 20000) {
     const [cx, cy] = queue.shift(); steps++;
     if (goalFn(wrapX(cx), cy) && !(cx === sx && cy === sy)) {
       const path = []; let cur = [cx, cy];
@@ -1019,7 +1019,7 @@ function aiIdle(d) {
   }
   if (Math.random() < 0.01 && tryFoundSuburb(d)) return;
   if (Math.random() < 0.02 && tryRelocateToSuburb(d)) return;
-  if (Math.random() < 0.02 && (d.ambition ?? 50) > 60) {
+  if (Math.random() < 0.03 && (d.ambition ?? 50) > 40) {
     if (trySeaSailing(d)) return;
   }
   if (Math.random() < 0.04 && tryBoardVehicle(d)) return;
@@ -1940,7 +1940,14 @@ function trySeaSailing(d) {
     return false;
   });
   if (!coastalCities.length) return false;
-  const dest = coastalCities[Math.floor(Math.random()*coastalCities.length)];
+  // Prefer closer cities to increase pathfinding success
+  coastalCities.sort((a,b) => {
+    const da = Math.min(Math.abs(a.mx-city.mx), MAP_W-Math.abs(a.mx-city.mx)) + Math.abs(a.my-city.my);
+    const db = Math.min(Math.abs(b.mx-city.mx), MAP_W-Math.abs(b.mx-city.mx)) + Math.abs(b.my-city.my);
+    return da - db;
+  });
+  const pool = coastalCities.slice(0, Math.min(5, coastalCities.length));
+  const dest = pool[Math.floor(Math.random()*pool.length)];
   const coastPath = bfs(d.x, d.y, (x,y) => {
     for (const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]])
       if (isWater(wrapX(x+dx), y+dy)) return true;
