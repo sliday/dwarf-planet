@@ -140,23 +140,23 @@
     display: flex; flex-direction: column; gap: 10px;
   }
   .controls .section-label { font-size: 10px; letter-spacing: 0.1em; text-transform: uppercase; color: #a89984; }
-  .speed-slider-row { display: flex; align-items: center; gap: 6px; }
-  .speed-label { font-size: 12px; color: #a89984; min-width: 20px; text-align: center; }
-  .pause-btn { cursor: pointer; user-select: none; }
-  .pause-btn:hover { color: #ebdbb2; }
-  .pause-btn.active { color: #fb4934; }
-  .ctrl-slider {
-    -webkit-appearance: none; appearance: none; width: 100%; height: 4px;
-    background: #504945; border-radius: 2px; outline: none;
+  .pause-bar {
+    position: absolute; bottom: 24px; left: 50%; transform: translateX(-50%);
+    z-index: 15; pointer-events: auto;
   }
-  .ctrl-slider::-webkit-slider-thumb {
-    -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%;
-    background: #98971a; cursor: pointer; border: 1px solid #79740e;
+  .pause-bar button {
+    padding: 6px 20px; font-size: 13px; font-weight: 700; font-family: inherit;
+    background: rgba(29,32,33,0.92); border: 1px solid #504945; color: #ebdbb2;
+    border-radius: 6px; cursor: pointer; transition: background 0.15s, color 0.15s;
   }
-  .ctrl-slider::-moz-range-thumb {
-    width: 14px; height: 14px; border-radius: 50%;
-    background: #98971a; cursor: pointer; border: 1px solid #79740e;
+  .pause-bar button:hover { background: #504945; }
+  .pause-bar button.paused { background: #cc241d; border-color: #cc241d; color: #fbf1c7; }
+  .cost-overlay {
+    position: absolute; z-index: 20; pointer-events: none;
+    background: rgba(29,32,33,0.9); border: 1px solid #504945; border-radius: 4px;
+    padding: 4px 8px; font-size: 11px; color: #ebdbb2; white-space: nowrap;
   }
+  .cost-overlay.over-budget { border-color: #cc241d; color: #fb4934; }
   .action-row { display: flex; gap: 4px; }
   .action-btn {
     padding: 6px 16px; font-size: 13px; border: 1px solid #504945; background: #3c3836;
@@ -242,9 +242,6 @@
     background: rgba(29,32,33,0.97);
   }
   .mobile .controls .section-label { display: none; }
-  .mobile .speed-slider-row { flex: 1 1 100%; margin-bottom: 4px; }
-  .mobile .ctrl-slider::-webkit-slider-thumb { width: 28px; height: 28px; }
-  .mobile .ctrl-slider::-moz-range-thumb { width: 28px; height: 28px; }
   .mobile .action-btn {
     min-width: 44px; min-height: 44px; font-size: 18px; padding: 8px;
     display: flex; align-items: center; justify-content: center;
@@ -347,12 +344,11 @@
   <div class="log-filter-bar" id="log-filter-bar"></div>
 </div>
 
+<div class="pause-bar">
+  <button id="btn-pause" title="Pause / Resume (Space)">⏸ Pause</button>
+</div>
+<div class="cost-overlay" id="cost-overlay" style="display:none"></div>
 <div class="controls">
-  <div class="speed-slider-row">
-    <span class="speed-label pause-btn" id="btn-pause" title="Pause/Resume">&#x23f8;</span>
-    <input type="range" id="speed-slider" min="0" max="3" value="1" class="ctrl-slider">
-    <span class="speed-label" id="speed-val">1x</span>
-  </div>
   <div class="section-label" id="tool-label">Tools:</div>
   <div class="action-row">
     <button class="action-btn tool-btn" id="btn-mine" title="Toggle mining mode — click and drag to designate">&#x26cf; Mine</button>
@@ -4758,6 +4754,7 @@ canvas.addEventListener('mousemove', e => {
         x1: Math.min(G.drag.gx, tile.gx), y1: Math.min(G.drag.y, tile.y),
         x2: Math.max(G.drag.gx, tile.gx), y2: Math.max(G.drag.y, tile.y)
       };
+      updateCostOverlay();
     }
   }
 });
@@ -4794,9 +4791,132 @@ canvas.addEventListener('mousedown', e => {
   if (tile) { G.drag = tile; G.sel = { x1: tile.gx, y1: tile.y, x2: tile.gx, y2: tile.y }; }
 });
 
+// Designation costs & limits
+const DESIGNATE_COSTS = {
+  mine: { wood: 1, iron: 1 },
+  farm: { wood: 2, food: 1 },
+  road: { stone: 2, wood: 1 },
+  upgrade: { iron: 3, wood: 2 }
+};
+const DESIGNATE_MAX = { mine: 20, farm: 15, road: 50 };
+
+function countDesignatable(sel, mode) {
+  let count = 0, upgradeCount = 0;
+  const minable = new Set([T.MOUNTAIN, T.HILL, T.TUNDRA]);
+  const farmable = new Set([T.FLOOR, T.PLAINS, T.BEACH, T.DESERT, T.TUNDRA]);
+  const roadable = new Set([T.PLAINS, T.DESERT, T.TUNDRA, T.HILL, T.BEACH, T.FOREST, T.TAIGA, T.JUNGLE, T.FLOOR, T.MOUNTAIN, T.MUSHROOM]);
+  const upgradeable = new Set([T.PATH, T.ROAD, T.ASPHALT]);
+  for (let y = sel.y1; y <= sel.y2; y++)
+    for (let gx = sel.x1; gx <= sel.x2; gx++) {
+      const x = wrapX(gx);
+      if (mode === 'mine' && minable.has(G.map[y][x])) count++;
+      else if (mode === 'farm' && farmable.has(G.map[y][x])) count++;
+      else if (mode === 'road') {
+        if (roadable.has(G.map[y][x])) count++;
+        else if (upgradeable.has(G.map[y][x])) upgradeCount++;
+      }
+    }
+  return { count, upgradeCount };
+}
+
+function calcDesignationCost(count, upgradeCount, mode) {
+  const cost = {};
+  const baseCost = DESIGNATE_COSTS[mode];
+  for (const [res, amt] of Object.entries(baseCost)) cost[res] = amt * count;
+  if (upgradeCount > 0) {
+    const upCost = DESIGNATE_COSTS.upgrade;
+    for (const [res, amt] of Object.entries(upCost)) cost[res] = (cost[res] || 0) + amt * upgradeCount;
+  }
+  return cost;
+}
+
+function totalGlobalResource(res) {
+  let total = 0;
+  for (const c of CITIES) if (c.res) total += (c.res[res] || 0);
+  return total;
+}
+
+function canAfford(cost) {
+  for (const [res, amt] of Object.entries(cost)) {
+    if (amt > 0 && totalGlobalResource(res) < amt) return false;
+  }
+  return true;
+}
+
+function deductGlobalCost(cost) {
+  for (const [res, amt] of Object.entries(cost)) {
+    if (amt <= 0) continue;
+    const total = totalGlobalResource(res);
+    if (total <= 0) continue;
+    let remaining = amt;
+    for (const c of CITIES) {
+      if (!c.res || !c.res[res]) continue;
+      const share = Math.ceil((c.res[res] / total) * amt);
+      const deduct = Math.min(share, c.res[res], remaining);
+      c.res[res] -= deduct;
+      remaining -= deduct;
+      if (remaining <= 0) break;
+    }
+  }
+}
+
+function formatCost(cost) {
+  const parts = [];
+  const icons = { food: '🍖', wood: '🪵', stone: '🪨', iron: '⚔️', gold: '🌕' };
+  for (const [res, amt] of Object.entries(cost)) {
+    if (amt > 0) parts.push((icons[res] || res) + amt);
+  }
+  return parts.join(' ');
+}
+
+function updateCostOverlay() {
+  const overlay = document.getElementById('cost-overlay');
+  if (!G.sel || G.mode === 'normal') { overlay.style.display = 'none'; return; }
+  const s = G.sel;
+  const w = s.x2 - s.x1 + 1, h = s.y2 - s.y1 + 1;
+  const maxDim = DESIGNATE_MAX[G.mode] || 50;
+  const { count, upgradeCount } = countDesignatable(s, G.mode);
+  const total = count + upgradeCount;
+  if (total === 0) { overlay.style.display = 'none'; return; }
+  const cost = calcDesignationCost(count, upgradeCount, G.mode);
+  const affordable = canAfford(cost);
+  const overSize = w > maxDim || h > maxDim;
+  overlay.className = 'cost-overlay' + (!affordable || overSize ? ' over-budget' : '');
+  let text = total + ' tiles · ' + formatCost(cost);
+  if (overSize) text = '⚠ Max ' + maxDim + '×' + maxDim + ' · ' + text;
+  else if (!affordable) text = '⚠ Not enough · ' + text;
+  overlay.textContent = text;
+  const cx = ((s.x1 + s.x2 + 1) / 2) * TILE - G.cam.x;
+  const cy = s.y1 * TILE - G.cam.y - 24;
+  overlay.style.left = cx + 'px';
+  overlay.style.top = Math.max(4, cy) + 'px';
+  overlay.style.transform = 'translateX(-50%)';
+  overlay.style.display = 'block';
+}
+
 function finalizeDesignation() {
+  document.getElementById('cost-overlay').style.display = 'none';
   if (!G.drag || !G.sel) { G.drag = null; return; }
   const s = G.sel;
+  const w = s.x2 - s.x1 + 1, h = s.y2 - s.y1 + 1;
+  const maxDim = DESIGNATE_MAX[G.mode] || 50;
+  if (w > maxDim || h > maxDim) {
+    log(`⚠ Selection too large (max ${maxDim}×${maxDim})`, 'system', 2);
+    G.drag = null; G.sel = null; return;
+  }
+
+  const { count: preCount, upgradeCount: preUpgrade } = countDesignatable(s, G.mode);
+  const totalPre = preCount + preUpgrade;
+  if (totalPre === 0) { G.drag = null; G.sel = null; return; }
+
+  const cost = calcDesignationCost(preCount, preUpgrade, G.mode);
+  if (!canAfford(cost)) {
+    log(`⚠ Not enough resources: need ${formatCost(cost)}`, 'system', 2);
+    G.drag = null; G.sel = null; return;
+  }
+
+  deductGlobalCost(cost);
+
   let count = 0;
   const minable = new Set([T.MOUNTAIN, T.HILL, T.TUNDRA]);
   const buildable = new Set([T.FLOOR, T.PLAINS, T.BEACH, T.DESERT, T.TUNDRA]);
@@ -4807,14 +4927,14 @@ function finalizeDesignation() {
         const x = wrapX(gx);
         if (minable.has(G.map[y][x])) { G.map[y][x] = T.D_MINE; count++; }
       }
-    if (count) log(`⛏️ Designated ${count} tiles for mining`, 'mine');
+    if (count) log(`⛏️ Designated ${count} tiles for mining (${formatCost(cost)})`, 'mine', 2);
   } else if (G.mode === 'farm') {
     for (let y = s.y1; y <= s.y2; y++)
       for (let gx = s.x1; gx <= s.x2; gx++) {
         const x = wrapX(gx);
         if (buildable.has(G.map[y][x])) { G.map[y][x] = T.D_FARM; count++; }
       }
-    if (count) log(`🌱 Designated ${count} farm plots`, 'farm');
+    if (count) log(`🌱 Designated ${count} farm plots (${formatCost(cost)})`, 'farm', 2);
   } else if (G.mode === 'road') {
     const roadable = new Set([T.PLAINS, T.DESERT, T.TUNDRA, T.HILL, T.BEACH, T.FOREST, T.TAIGA, T.JUNGLE, T.FLOOR, T.MOUNTAIN, T.MUSHROOM]);
     const upgradeable = new Set([T.PATH, T.ROAD, T.ASPHALT]);
@@ -4825,9 +4945,7 @@ function finalizeDesignation() {
         if (roadable.has(G.map[y][x])) { G.map[y][x] = T.D_ROAD; count++; }
         else if (upgradeable.has(G.map[y][x])) { G.map[y][x] = T.D_UPGRADE; count++; upgradeCount++; }
       }
-    if (upgradeCount && !count) log(`🔺 Designated ${upgradeCount} road tiles for upgrade`, 'build');
-    else if (upgradeCount) log(`🛤️ Designated ${count - upgradeCount} new + ${upgradeCount} upgrades`, 'build');
-    else if (count) log(`🛤️ Designated ${count} tiles for road building`, 'build');
+    if (count) log(`🛤️ Designated ${count} road tiles (${formatCost(cost)})`, 'build', 2);
   }
 
   if (count) {
@@ -4923,6 +5041,7 @@ canvas.addEventListener('touchmove', e => {
           x1: Math.min(G.drag.gx, tile.gx), y1: Math.min(G.drag.y, tile.y),
           x2: Math.max(G.drag.gx, tile.gx), y2: Math.max(G.drag.y, tile.y)
         };
+        updateCostOverlay();
       }
     } else if (touch.startPos) {
       const dx = t0.clientX - touch.startPos.x;
@@ -5012,24 +5131,11 @@ document.getElementById('btn-mine').onclick = () => setMode(G.mode === 'mine' ? 
 document.getElementById('btn-farm').onclick = () => setMode(G.mode === 'farm' ? 'normal' : 'farm');
 document.getElementById('btn-road').onclick = () => setMode(G.mode === 'road' ? 'normal' : 'road');
 
-const SPEED_STEPS = [0, 1, 2, 5];
-const SPEED_LABELS = ['⏸', '1x', '2x', '5x'];
-const speedSlider = document.getElementById('speed-slider');
-const speedVal = document.getElementById('speed-val');
 const pauseBtn = document.getElementById('btn-pause');
 function updateSpeedUI() {
-  const idx = G.paused ? 0 : SPEED_STEPS.indexOf(G.speed);
-  speedSlider.value = idx >= 0 ? idx : 1;
-  speedVal.textContent = G.paused ? '⏸' : G.speed + 'x';
-  pauseBtn.classList.toggle('active', G.paused);
+  pauseBtn.classList.toggle('paused', G.paused);
+  pauseBtn.textContent = G.paused ? '▶ Play (Space)' : '⏸ Pause';
 }
-speedSlider.addEventListener('input', () => {
-  const idx = parseInt(speedSlider.value);
-  if (idx === 0) { G.paused = true; }
-  else { G.paused = false; G.speed = SPEED_STEPS[idx]; }
-  if (gameWorker) gameWorker.postMessage({ type: 'control', speed: G.speed, paused: G.paused });
-  updateSpeedUI();
-});
 pauseBtn.addEventListener('click', () => {
   G.paused = !G.paused;
   if (!G.paused && G.speed === 0) G.speed = 1;
@@ -5954,10 +6060,13 @@ window.addEventListener('beforeunload', () => {
 
 // ---- Game Loop ----
 let lastTime = 0, tickAccum = 0, frames = 0, fpsTimer = 0;
+const FRAME_MS = 1000 / 30; // cap at 30fps
 
 function gameLoop(ts) {
   requestAnimationFrame(gameLoop);
-  const dt = ts - lastTime; lastTime = ts;
+  const dt = ts - lastTime;
+  if (dt < FRAME_MS) return;
+  lastTime = ts;
   frames++; fpsTimer += dt;
   if (fpsTimer >= 1000) {
     document.getElementById('sb-fps').textContent = frames + ' fps';
