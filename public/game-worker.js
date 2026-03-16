@@ -1055,7 +1055,7 @@ function aiIdle(d) {
   }
   if (Math.random() < 0.01 && tryFoundSuburb(d)) return;
   if (Math.random() < 0.02 && tryRelocateToSuburb(d)) return;
-  if (Math.random() < 0.08) {
+  if (Math.random() < 0.15) {
     if (trySeaSailing(d)) return;
   }
   if (Math.random() < 0.04 && tryBoardVehicle(d)) return;
@@ -1431,7 +1431,7 @@ function toRoman(n) {
   return r;
 }
 function createShip(x, y, captainId, cityId) {
-  return { id:'s_'+Math.random().toString(36).slice(2,8), name:shipNameForCity(cityId), x, y, captainId, cityId, cargo:{}, cargoTotal:0, state:'docked', target:null, path:[], waterX:null, waterY:null };
+  return { id:'s_'+Math.random().toString(36).slice(2,8), name:shipNameForCity(cityId), x, y, captainId, cityId, cargo:{}, cargoTotal:0, state:'docked', target:null, path:[] };
 }
 function shipCargo(ship) { return Object.values(ship.cargo).reduce((s,v) => s+v, 0); }
 function tickShip(ship) {
@@ -1443,35 +1443,32 @@ function tickShip(ship) {
       ship.cargo.food = (ship.cargo.food||0)+2;
       ship.cargoTotal = shipCargo(ship);
     }
-    if (ship.path.length === 0) { ship.state = 'docked'; beachShip(ship); }
+    if (ship.path.length === 0) {
+      ship.state = 'docked';
+      const shore = findShoreSpot(ship.x, ship.y);
+      if (shore) { ship.x = shore.x; ship.y = shore.y; }
+    }
   }
 }
 function tickShips() { for (const ship of G.ships) tickShip(ship); }
-function beachShip(ship) {
-  const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
-  for (const [dx,dy] of dirs) {
-    const nx = wrapX(ship.x+dx), ny = ship.y+dy;
-    if (ny >= 0 && ny < MAP_H && isWalkable(nx, ny)) {
-      ship.waterX = ship.x; ship.waterY = ship.y;
-      ship.x = nx; ship.y = ny;
-      return;
+function findShoreSpot(x, y, radius) {
+  radius = radius || 5;
+  let best = null, bestDist = Infinity;
+  for (let dy = -radius; dy <= radius; dy++)
+    for (let dx = -radius; dx <= radius; dx++) {
+      const nx = wrapX(x+dx), ny = y+dy;
+      if (ny < 0 || ny >= MAP_H || !isWater(nx, ny)) continue;
+      const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
+      let adjLand = false;
+      for (const [ddx,ddy] of dirs) {
+        const lx = wrapX(nx+ddx), ly = ny+ddy;
+        if (ly >= 0 && ly < MAP_H && isWalkable(lx, ly)) { adjLand = true; break; }
+      }
+      if (!adjLand) continue;
+      const dist = Math.abs(dx) + Math.abs(dy);
+      if (dist < bestDist) { bestDist = dist; best = {x:nx, y:ny}; }
     }
-  }
-}
-function launchShip(ship) {
-  if (ship.waterX !== null && ship.waterY !== null) {
-    ship.x = ship.waterX; ship.y = ship.waterY;
-    ship.waterX = null; ship.waterY = null;
-    return;
-  }
-  const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
-  for (const [dx,dy] of dirs) {
-    const nx = wrapX(ship.x+dx), ny = ship.y+dy;
-    if (ny >= 0 && ny < MAP_H && isWater(nx, ny)) {
-      ship.x = nx; ship.y = ny;
-      return;
-    }
-  }
+  return best;
 }
 
 // ---- Auto-connect cities with roads ----
@@ -1750,14 +1747,12 @@ function tryBuildShip(city) {
   r.wood -= SHIP_COST.wood; r.cloth -= SHIP_COST.cloth; r.iron -= SHIP_COST.iron;
   const ship = createShip(launchX, launchY, null, city.id);
   G.ships.push(ship);
-  beachShip(ship);
   log(`${city.name} ⛵ built a ship!`, 'city', 5, null, city.mx, city.my);
   return ship;
 }
 
 function boardShip(d, ship, destCity) {
   if (!destCity || destCity.mx === undefined) return false;
-  launchShip(ship);
   let destWX = null, destWY = null;
   for (let dy = -3; dy <= 3 && destWX === null; dy++)
     for (let dx = -3; dx <= 3 && destWX === null; dx++) {
@@ -1782,10 +1777,18 @@ function boardShip(d, ship, destCity) {
 function aiSail(d) {
   const ship = G.ships.find(s => s.id === d.target?.shipId);
   if (!ship) { d.state = 'idle'; d.target = null; return; }
-  d.x = ship.x; d.y = ship.y;
+  if (ship.state === 'sailing') { d.x = ship.x; d.y = ship.y; }
   if (ship.state === 'docked' && ship.target) {
     const destCity = cityById(ship.target.cityId);
     if (destCity) {
+      // Place dwarf on adjacent walkable land tile
+      const dirs = [[0,-1],[1,0],[0,1],[-1,0],[1,-1],[-1,-1],[1,1],[-1,1]];
+      let placed = false;
+      for (const [ddx,ddy] of dirs) {
+        const lx = wrapX(ship.x+ddx), ly = ship.y+ddy;
+        if (ly >= 0 && ly < MAP_H && isWalkable(lx, ly)) { d.x = lx; d.y = ly; placed = true; break; }
+      }
+      if (!placed) { d.x = destCity.mx; d.y = destCity.my; }
       for (const [k,v] of Object.entries(ship.cargo)) {
         if (destCity.res && destCity.res[k] !== undefined) destCity.res[k] += v;
       }
@@ -1797,6 +1800,12 @@ function aiSail(d) {
     }
     ship.target = null; d.state = 'idle'; d.target = null;
   } else if (ship.state === 'docked' && !ship.target) {
+    // Place dwarf on land before releasing
+    const dirs = [[0,-1],[1,0],[0,1],[-1,0],[1,-1],[-1,-1],[1,1],[-1,1]];
+    for (const [ddx,ddy] of dirs) {
+      const lx = wrapX(ship.x+ddx), ly = ship.y+ddy;
+      if (ly >= 0 && ly < MAP_H && isWalkable(lx, ly)) { d.x = lx; d.y = ly; break; }
+    }
     d.state = 'idle'; d.target = null; ship.captainId = null;
   }
   if (d.hunger < 30 && (ship.cargo.food||0) > 0) {
@@ -1997,8 +2006,14 @@ function trySeaSailing(d) {
   });
   const pool = coastalCities.slice(0, Math.min(8, coastalCities.length));
   const dest = pool[Math.floor(Math.random()*pool.length)];
-  // Dwarf walks to ship location then boards
-  const shipPath = bfs(d.x, d.y, (x,y) => Math.abs(x-ship.x) <= 1 && Math.abs(y-ship.y) <= 1 && isWalkable(x,y), false);
+  // Dwarf walks to walkable tile adjacent to ship (ship is on water/shore)
+  const adjToShip = (x,y) => {
+    const dx = Math.min(Math.abs(x-ship.x), MAP_W-Math.abs(x-ship.x));
+    return dx <= 1 && Math.abs(y-ship.y) <= 1 && isWalkable(x,y);
+  };
+  // Fast-path: already adjacent to ship
+  if (adjToShip(d.x, d.y)) return boardShip(d, ship, dest);
+  const shipPath = bfs(d.x, d.y, adjToShip, false);
   if (!shipPath || shipPath.length > 50) return false;
   return boardShip(d, ship, dest);
 }
@@ -2810,12 +2825,20 @@ self.onmessage = function(e) {
       }
       if (G.animals.length === 0) seedAnimals();
       if (saved.ships?.length) {
-        G.ships = saved.ships.map(s => ({
-          ...createShip(s.x, s.y, s.captainId, s.cityId),
-          id:s.id, name:s.name||shipNameForCity(s.cityId), cargo:s.cargo||{}, state:s.state||'docked',
-          cargoTotal:Object.values(s.cargo||{}).reduce((a,b)=>a+b,0),
-          path:[], target:null,
-        }));
+        G.ships = saved.ships.map(s => {
+          const ship = {
+            ...createShip(s.x, s.y, s.captainId, s.cityId),
+            id:s.id, name:s.name||shipNameForCity(s.cityId), cargo:s.cargo||{}, state:s.state||'docked',
+            cargoTotal:Object.values(s.cargo||{}).reduce((a,b)=>a+b,0),
+            path:[], target:null,
+          };
+          // Migrate beached ships back to shore water tiles
+          if (ship.state === 'docked' && !isWater(ship.x, ship.y)) {
+            const shore = findShoreSpot(ship.x, ship.y);
+            if (shore) { ship.x = shore.x; ship.y = shore.y; }
+          }
+          return ship;
+        });
       }
       if (saved.vehicles?.length) {
         G.vehicles = saved.vehicles.map(v => ({
