@@ -3795,6 +3795,50 @@ function render() {
     }
   }
 
+  // Bright road highlight when inspecting a city
+  if (inspCurrent?.type === 'city') {
+    const inspCity = cityById(inspCurrent.id);
+    if (inspCity && inspCity.mx != null) {
+      // Cache highlighted roads per city, rebuild when city changes or periodically
+      if (!G._hlRoads || G._hlRoadCity !== inspCurrent.id || G.tick % 60 === 0) {
+        const roadTypes = new Set([T.PATH, T.ROAD, T.ASPHALT, T.RAILROAD, T.CITY, T.FACTORY]);
+        const hrs = new Set();
+        const visited = new Set();
+        const q = [[inspCity.mx, inspCity.my]];
+        visited.add(`${inspCity.mx},${inspCity.my}`);
+        while (q.length > 0 && visited.size < 3000) {
+          const [cx, cy] = q.shift();
+          const ct = G.map[cy]?.[cx];
+          if (ct === T.PATH || ct === T.ROAD || ct === T.ASPHALT || ct === T.RAILROAD) hrs.add(`${cx},${cy}`);
+          for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
+            const nx = (cx + dx + MAP_W) % MAP_W, ny = cy + dy;
+            if (ny < 0 || ny >= MAP_H) continue;
+            const k = `${nx},${ny}`;
+            if (visited.has(k)) continue;
+            if (!roadTypes.has(G.map[ny][nx])) continue;
+            visited.add(k); q.push([nx, ny]);
+          }
+        }
+        G._hlRoads = hrs; G._hlRoadCity = inspCurrent.id;
+      }
+      if (G._hlRoads.size > 0) {
+        for (let gy = Math.max(0, startGY); gy < Math.min(MAP_H, endGY); gy++) {
+          for (let gx = startGX; gx < endGX; gx++) {
+            const wx = wrapX(gx);
+            if (!G._hlRoads.has(`${wx},${gy}`)) continue;
+            const pulse = Math.sin((wx + gy) * 0.8 + now * 4) * 0.5 + 0.5;
+            const px = gx * TILE - G.cam.x, py = gy * TILE - G.cam.y;
+            if (px < -TILE || py < -TILE || px > w + TILE || py > h + TILE) continue;
+            ctx.fillStyle = `rgba(250,189,47,${0.15 + pulse * 0.35})`;
+            ctx.fillRect(px, py, TILE, TILE);
+          }
+        }
+      }
+    }
+  } else {
+    G._hlRoads = null; G._hlRoadCity = null;
+  }
+
   // Ocean wave animation — shimmer on ocean tiles adjacent to shore
   for (let gy = Math.max(0, startGY); gy < Math.min(MAP_H, endGY); gy++) {
     for (let gx = startGX; gx < endGX; gx++) {
@@ -4663,6 +4707,30 @@ function showCityInspector(city) {
     span.appendChild(rv); resDiv.appendChild(span);
   }
   frag.appendChild(resDiv);
+
+  // Connected cities via road
+  const connections = [];
+  for (const [pairKey, tiers] of Object.entries(G.roadGraph || {})) {
+    const [id1, id2] = pairKey.split('-');
+    const otherId = id1 === city.id ? id2 : id2 === city.id ? id1 : null;
+    if (!otherId) continue;
+    const other = cityById(otherId);
+    if (!other) continue;
+    const best = tiers.railroad ? '🚂' : tiers.asphalt ? '⬛' : tiers.gravel ? '🟫' : tiers.path ? '👣' : null;
+    if (best) connections.push({city: other, icon: best, tiers});
+  }
+  if (connections.length > 0) {
+    const connSection = document.createElement('div'); connSection.style.cssText = 'margin-top:6px;border-top:1px solid #3c3836;padding-top:4px';
+    const connLabel = document.createElement('div'); connLabel.style.cssText = 'font-size:10px;color:#a89984;margin-bottom:2px';
+    connLabel.textContent = 'Connected Cities (' + connections.length + ')'; connSection.appendChild(connLabel);
+    for (const conn of connections) {
+      const link = document.createElement('div'); link.className = 'idwarf-link'; link.style.color = '#83a598';
+      link.textContent = conn.icon + ' ' + conn.city.emoji + ' ' + conn.city.name;
+      link.onclick = () => { G.cam.x = conn.city.mx * TILE - canvas.width / 2; G.cam.y = conn.city.my * TILE - canvas.height / 2; showCityInspector(conn.city); };
+      connSection.appendChild(link);
+    }
+    frag.appendChild(connSection);
+  }
 
   const popSection = document.createElement('div'); popSection.style.cssText = 'margin-top:6px;border-top:1px solid #3c3836;padding-top:4px';
   const popLabel = document.createElement('div'); popLabel.style.cssText = 'font-size:10px;color:#a89984;margin-bottom:2px';
@@ -6299,6 +6367,7 @@ function initWorker() {
           }
         }
         if (data.suburbs) G.suburbs = data.suburbs;
+        if (data.roadGraph) G.roadGraph = data.roadGraph;
         // Display buffered logs
         for (const l of data.logs) log(l.msg, l.type, l.rarity, l.season, l.cityEmoji, l.lx, l.ly);
         // Show buffered toasts

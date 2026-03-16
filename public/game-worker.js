@@ -2914,6 +2914,7 @@ function startTickLoop() {
       })),
       cities:CITIES.filter(c => c.res).map(c => ({id:c.id,res:{...c.res},mx:c.mx,my:c.my,name:c.name,emoji:c.emoji})),
       suburbs:G.suburbs.map(s => ({id:s.id,name:s.name,emoji:s.emoji,mx:s.mx,my:s.my,parentCityId:s.parentCityId,culture:s.culture,res:{...s.res}})),
+      roadGraph:G.roadGraph||{},
       logs:pendingLogs.splice(0),
       toasts:pendingToasts.splice(0),
       mapChanges:pendingMapChanges.splice(0),
