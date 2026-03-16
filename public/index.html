@@ -74,10 +74,10 @@
     z-index: 10; cursor: crosshair;
   }
   .site-logo {
-    position: absolute; top: 8px; left: 12px; z-index: 11;
-    display: flex; align-items: center; gap: 8px; pointer-events: auto;
+    position: absolute; top: 0; left: 12px; z-index: 11;
+    height: 40px; display: flex; align-items: center; gap: 6px; pointer-events: auto;
   }
-  .site-logo .logo-text { font-size: 15px; font-weight: 800; color: #ebdbb2; letter-spacing: 0.02em; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
+  .site-logo .logo-text { font-size: 15px; font-weight: 900; color: #ebdbb2; letter-spacing: 0.02em; text-shadow: 0 1px 3px rgba(0,0,0,0.5); }
   .site-logo .logo-dot { color: #fabd2f; }
   .site-logo .info-btn {
     font-size: 13px; color: #a89984; cursor: pointer; background: rgba(60,56,54,0.8);
@@ -102,6 +102,15 @@
   }
   .log-header button { background: none; border: none; color: #a89984; cursor: pointer; font-size: 14px; }
   .log-rarity-wrap { display: flex; align-items: center; gap: 4px; }
+  .log-filter-bar { display: flex; border-top: 1px solid #3c3836; }
+  .log-filter-bar button {
+    flex: 1; padding: 4px 0; font-size: 9px; letter-spacing: 0.05em;
+    background: none; border: none; color: #665c54; cursor: pointer;
+    font-family: inherit; text-transform: uppercase; transition: color 0.15s, background 0.15s;
+  }
+  .log-filter-bar button:not(:last-child) { border-right: 1px solid #3c3836; }
+  .log-filter-bar button:hover { color: #a89984; }
+  .log-filter-bar button.active { color: #ebdbb2; background: rgba(69,133,136,0.3); }
   .log-count { font-size: 9px; color: #665c54; margin-left: 2px; }
   .log-body {
     overflow-y: auto; padding: 4px 12px; font-size: 12px; font-weight: 600;
@@ -168,8 +177,8 @@
   }
 
   .inspector-panel {
-    position: absolute; top: 116px; left: 8px;
-    width: 300px; max-height: calc(100vh - 160px);
+    position: absolute; top: 52px; left: 8px;
+    width: 300px; max-height: calc(100vh - 100px);
     overflow-y: auto; background: rgba(29,32,33,0.95);
     border: 1px solid #504945; border-radius: 6px;
     z-index: 25; display: none; font-size: 12px;
@@ -325,20 +334,17 @@
 
 <div id="year-banner" class="hidden"></div>
 <div class="site-logo">
-  <span class="logo-text">dwarf<span class="logo-dot">.</span>land</span>
+  <span class="logo-text">🧔 dwarf<span class="logo-dot">.</span>land</span>
   <button class="info-btn" onclick="DAUB.openModal('about-modal')" title="Info">i</button>
 </div>
 <canvas class="minimap" id="minimap" width="250" height="125"></canvas>
 <div class="event-log">
   <div class="log-header">
     <span>Event Log</span>
-    <span class="log-rarity-wrap">
-      <input type="range" id="log-rarity" min="1" max="5" value="1" class="ctrl-slider" style="width:60px" title="Filter: Common → Epic">
-      <span id="log-rarity-label" style="font-size:9px;min-width:30px">All</span>
-    </span>
     <button id="btn-clear-log" title="Clear">&#x1f5d1;</button>
   </div>
   <div class="log-body" id="log-body"></div>
+  <div class="log-filter-bar" id="log-filter-bar"></div>
 </div>
 
 <div class="controls">
@@ -3372,22 +3378,31 @@ function tickSeason() {
 // ---- Event Log ----
 const logEntries = [];
 let logRarity = 1;
-const RARITY_LABELS = { 1: 'All', 2: 'Uncommon+', 3: 'Notable+', 4: 'Rare+', 5: 'Epic' };
+const RARITY_LABELS = { 1: 'All', 2: 'Uncommon', 3: 'Notable', 4: 'Rare', 5: 'Epic' };
+let logDirty = false;
 function log(msg, type, rarity, season, cityEmoji, lx, ly) {
   const s = season !== undefined ? season : G.season;
   const ts = SEASON_EMOJIS[s] + (cityEmoji ? ' ' + cityEmoji : '');
   logEntries.push({ ts, msg, type, rarity: rarity || 1, lx: lx ?? null, ly: ly ?? null });
   if (logEntries.length > 200) logEntries.shift();
-  renderLog();
+  logDirty = true;
 }
 
-const logRaritySlider = document.getElementById('log-rarity');
-const logRarityLabel = document.getElementById('log-rarity-label');
-logRaritySlider.addEventListener('input', () => {
-  logRarity = parseInt(logRaritySlider.value);
-  logRarityLabel.textContent = RARITY_LABELS[logRarity];
-  renderLog();
-});
+// Segment filter bar
+logRarity = 2;
+const logFilterBar = document.getElementById('log-filter-bar');
+for (const [val, label] of Object.entries(RARITY_LABELS)) {
+  const btn = document.createElement('button');
+  btn.textContent = label;
+  btn.dataset.val = val;
+  if (parseInt(val) === logRarity) btn.classList.add('active');
+  btn.onclick = () => {
+    logRarity = parseInt(val);
+    logFilterBar.querySelectorAll('button').forEach(b => b.classList.toggle('active', b.dataset.val === val));
+    renderLog();
+  };
+  logFilterBar.appendChild(btn);
+}
 
 function linkifyDwarfNames(msg) {
   for (const d of G.dwarves) {
@@ -4161,7 +4176,21 @@ const inspTitle = document.getElementById('insp-title');
 const inspBody = document.getElementById('insp-body');
 function esc(s) { const el = document.createElement('div'); el.textContent = s; return el.innerHTML; }
 
+function positionInspectorBelow(el) {
+  if (isMobile) return;
+  const r = el.getBoundingClientRect();
+  const left = Math.max(8, Math.min(r.left, window.innerWidth - 316));
+  inspPanel.style.left = left + 'px';
+  inspPanel.style.top = (r.bottom + 4) + 'px';
+}
+function resetInspectorPosition() {
+  if (isMobile) return;
+  inspPanel.style.left = '8px';
+  inspPanel.style.top = '52px';
+}
+
 function openInspector(tile) {
+  resetInspectorPosition();
   const dwarves = G.dwarves.filter(dw => dw.x === tile.x && dw.y === tile.y);
   const ship = G.ships.find(s => s.x === tile.x && s.y === tile.y);
   const animal = G.animals.find(a => a.x === tile.x && a.y === tile.y);
@@ -4671,6 +4700,7 @@ function showTerrainInspector(tile) {
 }
 
 function showResourceRanking(resKey) {
+  positionInspectorBelow(document.getElementById('hud-res-wrap'));
   const icon = RES_ICONS.find(([, k]) => k === resKey);
   inspTitle.textContent = (icon ? icon[0] + ' ' : '') + (RES_NAMES[resKey] || resKey);
   const frag = document.createDocumentFragment();
@@ -5545,10 +5575,11 @@ function showPopulationPanel() {
   if (isMobile) inspPanel.classList.add('open'); else inspPanel.style.display = 'block';
   inspCurrent = { type: 'population' };
 }
-document.getElementById('hud-pop-wrap').onclick = () => { popFilter = ''; showPopulationPanel(); };
+document.getElementById('hud-pop-wrap').onclick = () => { popFilter = ''; positionInspectorBelow(document.getElementById('hud-pop-wrap')); showPopulationPanel(); };
 
 // Timeline panel
 document.getElementById('hud-year-wrap').onclick = () => {
+  positionInspectorBelow(document.getElementById('hud-year-wrap'));
   const seasonEmoji = SEASON_EMOJIS[G.season];
   const seasonName = SEASONS[G.season];
   inspTitle.textContent = '📅 Year ' + G.year + ' — ' + seasonEmoji + ' ' + seasonName;
@@ -5752,18 +5783,15 @@ function showGraveInspector(gx, gy, g) {
 
 // Sponsored dwarves panel
 document.getElementById('hud-sponsored-wrap').onclick = async () => {
+  positionInspectorBelow(document.getElementById('hud-sponsored-wrap'));
   const sponsored = G.dwarves.filter(d => d.sponsored);
-  const panel = document.getElementById('inspector');
-  panel.textContent = '';
-  const title = document.createElement('h3');
-  title.style.cssText = 'margin:0 0 8px;color:#fabd2f';
-  title.textContent = '⭐ Sponsored Dwarves';
-  panel.appendChild(title);
+  inspTitle.textContent = '⭐ Sponsored Dwarves';
+  const frag = document.createDocumentFragment();
   if (sponsored.length === 0) {
-    const msg = document.createElement('p');
-    msg.style.cssText = 'color:#a89984;font-size:12px';
-    msg.textContent = 'No sponsored dwarves yet. Click a dwarf and use "Sponsor Brain" to upgrade their AI!';
-    panel.appendChild(msg);
+    const msg = document.createElement('div');
+    msg.style.cssText = 'color:#a89984;font-size:12px;margin-bottom:8px';
+    msg.textContent = 'No sponsored dwarves yet.';
+    frag.appendChild(msg);
   } else {
     for (const d of sponsored) {
       const city = cityOf(d);
@@ -5782,9 +5810,28 @@ document.getElementById('hud-sponsored-wrap').onclick = async () => {
       info.textContent = d.sponsorTier + ' · ' + d.sponsorCallsRemaining + ' calls left';
       row.append(star, name, citySpan, info);
       row.onclick = () => { G.followDwarf = d.id; G.cam.x = d.x * TILE - canvas.width / 2; G.cam.y = d.y * TILE - canvas.height / 2; openInspector({ x: d.x, y: d.y, gx: d.x }); };
-      panel.appendChild(row);
+      frag.appendChild(row);
     }
   }
+  const sponsorBtn = document.createElement('button');
+  sponsorBtn.style.cssText = 'margin-top:8px;width:100%;padding:8px;background:#d79921;color:#1d2021;border:none;border-radius:4px;font-weight:700;font-size:12px;cursor:pointer';
+  sponsorBtn.textContent = '⭐ Sponsor a Dwarf';
+  sponsorBtn.onclick = () => {
+    closeInspector();
+    const tip = document.createElement('div');
+    tip.style.cssText = 'position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:#282828;border:1px solid #fabd2f;border-radius:8px;padding:16px 24px;z-index:50;color:#ebdbb2;font-size:13px;text-align:center';
+    const line1 = document.createElement('div');
+    line1.textContent = 'Click any dwarf on the map, then use';
+    const line2 = document.createElement('strong');
+    line2.style.color = '#fabd2f';
+    line2.textContent = '⭐ Sponsor Brain';
+    const line3 = document.createElement('div');
+    line3.textContent = 'to upgrade their AI!';
+    tip.append(line1, line2, line3);
+    document.body.appendChild(tip);
+    setTimeout(() => tip.remove(), 3000);
+  };
+  frag.appendChild(sponsorBtn);
   try {
     const res = await fetch(`${AI.apiBase}/api/sponsor/list`);
     if (res.ok) {
@@ -5792,11 +5839,13 @@ document.getElementById('hud-sponsored-wrap').onclick = async () => {
       const total = sponsorships.reduce((s, r) => s + r.amount_cents, 0);
       const footer = document.createElement('div');
       footer.style.cssText = 'margin-top:8px;color:#928374;font-size:11px';
-      footer.textContent = 'Total sponsored: $' + (total / 100).toFixed(2) + ' · ' + sponsorships.length + ' sponsorship(s)';
-      panel.appendChild(footer);
+      footer.textContent = 'Total: $' + (total / 100).toFixed(2) + ' · ' + sponsorships.length + ' sponsorship(s)';
+      frag.appendChild(footer);
     }
   } catch (_) {}
-  panel.style.display = 'block';
+  inspBody.textContent = '';
+  inspBody.appendChild(frag);
+  if (isMobile) { inspPanel.classList.add('open'); } else inspPanel.style.display = 'block';
 };
 
 async function restoreState() {
@@ -5964,6 +6013,7 @@ function gameLoop(ts) {
     }
   }
 
+  if (logDirty) { logDirty = false; renderLog(); }
   render();
 }
 
