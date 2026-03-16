@@ -1377,7 +1377,22 @@ function shipNameForCity(cityId) {
   const city = cityById(cityId);
   const culture = city ? city.culture : null;
   const names = SHIP_NAMES[culture] || SHIP_NAMES._default;
-  return names[Math.floor(Math.random() * names.length)];
+  const used = new Set(G.ships.map(s => s.name));
+  const available = names.filter(n => !used.has(n));
+  if (available.length > 0) return available[Math.floor(Math.random() * available.length)];
+  // All culture names taken — append roman numeral
+  let num = 2;
+  while (true) {
+    const candidate = names[Math.floor(Math.random() * names.length)] + ' ' + toRoman(num);
+    if (!used.has(candidate)) return candidate;
+    num++;
+  }
+}
+function toRoman(n) {
+  const vals = [[10,'X'],[9,'IX'],[5,'V'],[4,'IV'],[1,'I']];
+  let r = '';
+  for (const [v,s] of vals) { while (n >= v) { r += s; n -= v; } }
+  return r;
 }
 function createShip(x, y, captainId, cityId) {
   return { id:'s_'+Math.random().toString(36).slice(2,8), name:shipNameForCity(cityId), x, y, captainId, cityId, cargo:{}, cargoTotal:0, state:'docked', target:null, path:[], waterX:null, waterY:null };
@@ -2627,7 +2642,7 @@ function getSerializableState() {
     stats:G.stats,
     homeCity:G.homeCity?{name:G.homeCity.name,mx:G.homeCity.mx,my:G.homeCity.my}:null,
     ships:G.ships.map(s => ({
-      id:s.id,x:s.x,y:s.y,captainId:s.captainId,cityId:s.cityId,
+      id:s.id,name:s.name,x:s.x,y:s.y,captainId:s.captainId,cityId:s.cityId,
       cargo:s.cargo,state:s.state,
     })),
     vehicles:G.vehicles.map(v => ({
@@ -2832,7 +2847,7 @@ function startTickLoop() {
         state:a.state,owner:a.owner,
       })),
       ships:G.ships.map(s => ({
-        id:s.id,x:s.x,y:s.y,captainId:s.captainId,cityId:s.cityId,
+        id:s.id,name:s.name,x:s.x,y:s.y,captainId:s.captainId,cityId:s.cityId,
         cargo:s.cargo,cargoTotal:s.cargoTotal||0,state:s.state,
         target:s.target?{cityId:s.target.cityId}:null,
         pathLength:s.path?.length||0,
