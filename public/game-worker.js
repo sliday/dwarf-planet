@@ -881,21 +881,57 @@ function isOrphanRoad(x, y) {
 
 function tryBoardVehicle(d) {
   if (d.hunger < 25 || d.energy < 20) return false;
-  const v = G.vehicles.find(v =>
+  // Try hopping on a passing vehicle
+  const passing = G.vehicles.find(v =>
     v.state === 'en_route' && v.x === d.x && v.y === d.y &&
     (v.passengers?.length || 0) + (v.cargoTotal || 0) + 1 < VEHICLE_TYPES[v.type].capacity
   );
-  if (!v || !v.target?.cityId) return false;
-  const destCity = cityById(v.target.cityId);
-  if (!destCity || destCity.id === d.cityId) return false;
-  if (!v.passengers) v.passengers = [];
-  v.passengers.push(d.id);
-  d.state = 'riding';
-  d.target = { type:'ride_vehicle', vehicleId:v.id, destCityId:destCity.id };
-  d.path = [];
-  log(`${d.name} boarded ${VEHICLE_TYPES[v.type].name} to ${destCity.name}`, 'trade', 2, null, d.x, d.y);
-  addEvent(d, 'travel', `Boarded ${VEHICLE_TYPES[v.type].name} to ${destCity.name}`);
-  return true;
+  if (passing && passing.target?.cityId) {
+    const destCity = cityById(passing.target.cityId);
+    if (destCity && destCity.id !== d.cityId) {
+      if (!passing.passengers) passing.passengers = [];
+      passing.passengers.push(d.id);
+      d.state = 'riding';
+      d.target = { type:'ride_vehicle', vehicleId:passing.id, destCityId:destCity.id };
+      d.path = [];
+      log(`${d.name} boarded ${VEHICLE_TYPES[passing.type].name} to ${destCity.name}`, 'trade', 2, null, d.x, d.y);
+      addEvent(d, 'travel', `Boarded ${VEHICLE_TYPES[passing.type].name} to ${destCity.name}`);
+      return true;
+    }
+  }
+  // Try driving a parked vehicle to another city
+  const home = cityOf(d);
+  if (!home || !home.res) return false;
+  const parked = G.vehicles.find(v =>
+    v.cityId === home.id && !v.driverId && v.state === 'parked' &&
+    Math.min(Math.abs(v.x - d.x), MAP_W - Math.abs(v.x - d.x)) + Math.abs(v.y - d.y) < 15
+  );
+  if (!parked) return false;
+  const vt = VEHICLE_TYPES[parked.type];
+  // Find a connected city via road
+  const otherCities = CITIES.filter(c => c.id !== home.id && c.mx !== undefined);
+  for (const dest of otherCities) {
+    const pairKey = [home.id, dest.id].sort().join('-');
+    const tiers = G.roadGraph?.[pairKey];
+    const tierOk = vt.minRoad === T.PATH ? tiers?.path
+      : vt.minRoad === T.ROAD ? tiers?.gravel
+      : vt.minRoad === T.ASPHALT ? tiers?.asphalt
+      : tiers?.railroad;
+    if (!tierOk) continue;
+    const vPath = findVehicleRoute(home, dest, vt.minRoad);
+    if (!vPath || vPath.length === 0) continue;
+    parked.driverId = d.id;
+    parked.state = 'en_route'; parked.mode = 'travel';
+    parked.target = { cityId: dest.id };
+    parked.path = vPath;
+    d.state = 'driving';
+    d.target = { type: 'drive_vehicle', vehicleId: parked.id, cityId: dest.id };
+    d.path = [];
+    log(`${d.name} ${vt.emoji} driving ${vt.name} to ${dest.name}`, 'system', 2, null, d.x, d.y);
+    addEvent(d, 'travel', `Driving ${vt.name} to ${dest.name}`);
+    return true;
+  }
+  return false;
 }
 
 function aiIdle(d) {
@@ -1019,7 +1055,7 @@ function aiIdle(d) {
   }
   if (Math.random() < 0.01 && tryFoundSuburb(d)) return;
   if (Math.random() < 0.02 && tryRelocateToSuburb(d)) return;
-  if (Math.random() < 0.03 && (d.ambition ?? 50) > 40) {
+  if (Math.random() < 0.08) {
     if (trySeaSailing(d)) return;
   }
   if (Math.random() < 0.04 && tryBoardVehicle(d)) return;
@@ -1913,23 +1949,37 @@ function tryRelocateToSuburb(d) {
   return false;
 }
 
+function findNearbyShip(d, city) {
+  // Find any docked ship at this city or nearby cities
+  let ship = G.ships.find(s => s.cityId === city.id && !s.captainId && s.state === 'docked');
+  if (ship) return ship;
+  // Check ships at nearby cities within ~50 tiles
+  for (const s of G.ships) {
+    if (s.captainId || s.state !== 'docked') continue;
+    const dist = Math.min(Math.abs(s.x - d.x), MAP_W - Math.abs(s.x - d.x)) + Math.abs(s.y - d.y);
+    if (dist < 50) return s;
+  }
+  return null;
+}
+
 function trySeaSailing(d) {
   if (G.ships.length >= 50) return false;
   const city = cityOf(d);
   if (!city || !city.res) return false;
-  if (!isCoastal(city.mx, city.my)) {
-    let coastal = false;
-    for (let dy = -4; dy <= 4 && !coastal; dy++)
-      for (let dx = -4; dx <= 4 && !coastal; dx++) {
+  // Find available ship nearby
+  let ship = findNearbyShip(d, city);
+  if (!ship && city.res.wood >= SHIP_COST.wood && city.res.cloth >= SHIP_COST.cloth && city.res.iron >= SHIP_COST.iron) {
+    // Check if city is near coast before trying to build
+    let nearCoast = false;
+    for (let dy = -4; dy <= 4 && !nearCoast; dy++)
+      for (let dx = -4; dx <= 4 && !nearCoast; dx++) {
         const x = wrapX(city.mx+dx), y = city.my+dy;
-        if (y >= 0 && y < MAP_H && isCoastal(x, y)) coastal = true;
+        if (y >= 0 && y < MAP_H && isWater(x, y)) nearCoast = true;
       }
-    if (!coastal) return false;
+    if (nearCoast) ship = tryBuildShip(city);
   }
-  let ship = G.ships.find(s => s.cityId === city.id && !s.captainId && s.state === 'docked');
-  if (!ship && city.res.wood >= SHIP_COST.wood && city.res.cloth >= SHIP_COST.cloth && city.res.iron >= SHIP_COST.iron)
-    ship = tryBuildShip(city);
   if (!ship) return false;
+  // Pick destination — prefer closer coastal cities
   const otherCities = CITIES.filter(c => c.id !== city.id && c.mx !== undefined);
   const coastalCities = otherCities.filter(c => {
     for (let dy = -3; dy <= 3; dy++)
@@ -1940,21 +1990,17 @@ function trySeaSailing(d) {
     return false;
   });
   if (!coastalCities.length) return false;
-  // Prefer closer cities to increase pathfinding success
   coastalCities.sort((a,b) => {
     const da = Math.min(Math.abs(a.mx-city.mx), MAP_W-Math.abs(a.mx-city.mx)) + Math.abs(a.my-city.my);
     const db = Math.min(Math.abs(b.mx-city.mx), MAP_W-Math.abs(b.mx-city.mx)) + Math.abs(b.my-city.my);
     return da - db;
   });
-  const pool = coastalCities.slice(0, Math.min(5, coastalCities.length));
+  const pool = coastalCities.slice(0, Math.min(8, coastalCities.length));
   const dest = pool[Math.floor(Math.random()*pool.length)];
-  const coastPath = bfs(d.x, d.y, (x,y) => {
-    for (const [dx,dy] of [[0,-1],[1,0],[0,1],[-1,0]])
-      if (isWater(wrapX(x+dx), y+dy)) return true;
-    return false;
-  }, false);
-  if (coastPath && coastPath.length < 20) return boardShip(d, ship, dest);
-  return false;
+  // Dwarf walks to ship location then boards
+  const shipPath = bfs(d.x, d.y, (x,y) => Math.abs(x-ship.x) <= 1 && Math.abs(y-ship.y) <= 1 && isWalkable(x,y), false);
+  if (!shipPath || shipPath.length > 50) return false;
+  return boardShip(d, ship, dest);
 }
 
 function aiSeekFood(d) {
