@@ -4167,16 +4167,26 @@ function updateHUD() {
   const camCX = Math.floor((G.cam.x + canvas.width / 2) / TILE);
   const camCY = Math.floor((G.cam.y + canvas.height / 2) / TILE);
   const nc = nearestCity(wrapX(camCX), Math.max(0, Math.min(MAP_H - 1, camCY)));
-  if (nc && nc.res) {
+  if (nc) {
     document.getElementById('h-city').textContent = nc.emoji + ' ' + nc.name;
-    const r = nc.res;
+    // Show global totals across all cities
+    const totals = {};
+    for (const [, key] of RES_ICONS) totals[key] = 0;
+    for (const c of CITIES) {
+      if (!c.res) continue;
+      for (const [, key] of RES_ICONS) totals[key] += (c.res[key] ?? 0);
+    }
+    for (const sub of G.suburbs || []) {
+      if (!sub.res) continue;
+      for (const [, key] of RES_ICONS) totals[key] += (sub.res[key] ?? 0);
+    }
     const resEl = document.getElementById('h-res');
     resEl.textContent = '';
     for (const [icon, key] of RES_ICONS) {
       const span = document.createElement('span');
       span.className = 'res-item';
-      span.title = RES_NAMES[key] + ' — click to rank cities';
-      span.textContent = icon + fmtN(r[key] ?? 0);
+      span.title = RES_NAMES[key] + ' (global) — click to rank cities';
+      span.textContent = icon + fmtN(totals[key]);
       span.onclick = (e) => { e.stopPropagation(); showResourceRanking(key); };
       resEl.appendChild(span);
     }
