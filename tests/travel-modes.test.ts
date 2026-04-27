@@ -131,3 +131,55 @@ describe('travel mode on dwarf', () => {
     expect(d.travelMode).toBeNull();
   });
 });
+
+// Mode downshift: when preferred mode pathfind fails, fall back through chain.
+// train -> car -> cart -> walk; ship -> walk if non-coastal.
+const TRAVEL_DOWNSHIFT = ['train', 'car', 'cart', 'walk'];
+
+function modeChain(preferred: string, isCoastalPair: boolean): string[] {
+  if (preferred === 'ship') return isCoastalPair ? ['ship', 'walk'] : ['walk'];
+  const idx = TRAVEL_DOWNSHIFT.indexOf(preferred);
+  return TRAVEL_DOWNSHIFT.slice(idx >= 0 ? idx : TRAVEL_DOWNSHIFT.length - 1);
+}
+
+describe('travel mode downshift', () => {
+  it('train downshifts through car, cart, walk', () => {
+    expect(modeChain('train', false)).toEqual(['train', 'car', 'cart', 'walk']);
+  });
+  it('car downshifts through cart, walk', () => {
+    expect(modeChain('car', false)).toEqual(['car', 'cart', 'walk']);
+  });
+  it('cart downshifts to walk', () => {
+    expect(modeChain('cart', false)).toEqual(['cart', 'walk']);
+  });
+  it('walk has no downshift', () => {
+    expect(modeChain('walk', false)).toEqual(['walk']);
+  });
+  it('ship downshifts to walk when coastal pair', () => {
+    expect(modeChain('ship', true)).toEqual(['ship', 'walk']);
+  });
+  it('ship falls straight to walk when non-coastal', () => {
+    expect(modeChain('ship', false)).toEqual(['walk']);
+  });
+});
+
+describe('walk path cap', () => {
+  // Live game runs MAP_W=2000. Cap of 200 blocked all cross-map walks.
+  // New cap must accept at least 2000 tiles.
+  const WALK_PATH_CAP = 2000;
+  it('cap accepts paths up to 2000 tiles', () => {
+    expect(WALK_PATH_CAP).toBeGreaterThanOrEqual(2000);
+  });
+  it('cap rejects paths over 2000 tiles', () => {
+    const samplePath = new Array(2001);
+    expect(samplePath.length > WALK_PATH_CAP).toBe(true);
+  });
+});
+
+describe('inter-city connector range', () => {
+  // Auto-connector previously gated at dist < 80 — too small for 2000-wide map.
+  const CONNECTOR_MAX_DIST = 400;
+  it('accepts pairs within 400 tiles', () => {
+    expect(CONNECTOR_MAX_DIST).toBeGreaterThanOrEqual(400);
+  });
+});

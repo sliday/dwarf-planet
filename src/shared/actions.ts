@@ -62,6 +62,7 @@ export const ACTIONS = {
   walk: { category: 'movement', keyStat: 'CON', durationTicks: 1 },
   explore: { category: 'movement', keyStat: 'CON', durationTicks: 20 },
   migrate: { category: 'movement', keyStat: 'CON', durationTicks: 50 },
+  travel: { category: 'movement', keyStat: 'CON', durationTicks: 30 },
 
   // Idle
   wander: { category: 'idle', keyStat: 'CON', durationTicks: 10 },
@@ -74,7 +75,7 @@ export const ACTION_IDS = Object.keys(ACTIONS) as ActionId[];
 // Simple tier actions (daily survival/work)
 export const SIMPLE_ACTIONS: ActionId[] = [
   'eat', 'drink', 'sleep', 'rest', 'mine', 'build', 'farm', 'craft',
-  'cook', 'brew', 'haul', 'chop', 'pray', 'wander', 'walk', 'explore',
+  'cook', 'brew', 'haul', 'chop', 'pray', 'wander', 'walk', 'explore', 'travel',
 ];
 
 // Medium tier actions (social)

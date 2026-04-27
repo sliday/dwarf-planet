@@ -56,6 +56,7 @@ Rules:
 - If hunger < 30, pick "eat"
 - If energy < 20, pick "sleep"
 - Otherwise pick productive work: mine, farm, chop, build, craft, cook
+- If home city has surplus food/wood and the dwarf is well-fed and rested, "travel" to another city for trade or exploration (uses cart/car/train/ship depending on connection)
 - If nothing urgent, "wander" or "explore"
 - Keep reasons under 80 chars
 

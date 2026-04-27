@@ -63,41 +63,65 @@ function bestTravelMode(origin, dest) {
   return 'walk';
 }
 
+function tryShipPath(city, dest) {
+  let originW = null, destW = null;
+  for (let dy = -4; dy <= 4 && !originW; dy++)
+    for (let dx = -4; dx <= 4 && !originW; dx++) {
+      const x = wrapX(city.mx+dx), y = city.my+dy;
+      if (y >= 0 && y < MAP_H && isWater(x, y)) originW = {x, y};
+    }
+  for (let dy = -4; dy <= 4 && !destW; dy++)
+    for (let dx = -4; dx <= 4 && !destW; dx++) {
+      const x = wrapX(dest.mx+dx), y = dest.my+dy;
+      if (y >= 0 && y < MAP_H && isWater(x, y)) destW = {x, y};
+    }
+  if (!originW || !destW) return null;
+  const waterPath = bfsWater(originW.x, originW.y, (x,y) => x === destW.x && y === destW.y);
+  return (waterPath && waterPath.length > 0) ? waterPath : null;
+}
+
+function tryRoadPath(city, dest, mode) {
+  const minRoad = mode === 'train' ? T.RAILROAD : mode === 'car' ? T.ASPHALT : T.PATH;
+  const vPath = findVehicleRoute(city, dest, minRoad);
+  return (vPath && vPath.length > 0) ? vPath : null;
+}
+
+function tryWalkPath(d, dest) {
+  const wp = bfs(d.x, d.y, (x,y) => Math.abs(x-dest.mx) <= 2 && Math.abs(y-dest.my) <= 2 && isWalkable(x,y), false);
+  if (!wp || wp.length === 0 || wp.length > 2000) return null;
+  return wp;
+}
+
+// Mode chain — when preferred mode pathfind fails, downshift to next-best.
+const TRAVEL_DOWNSHIFT = ['train', 'car', 'cart', 'walk'];
+
 function tryTravelTo(d, city, dest) {
-  const mode = bestTravelMode(city, dest);
-  const tm = TRAVEL_MODES[mode];
-  if (mode === 'ship') {
-    let originW = null, destW = null;
-    for (let dy = -4; dy <= 4 && !originW; dy++)
-      for (let dx = -4; dx <= 4 && !originW; dx++) {
-        const x = wrapX(city.mx+dx), y = city.my+dy;
-        if (y >= 0 && y < MAP_H && isWater(x, y)) originW = {x, y};
-      }
-    for (let dy = -4; dy <= 4 && !destW; dy++)
-      for (let dx = -4; dx <= 4 && !destW; dx++) {
-        const x = wrapX(dest.mx+dx), y = dest.my+dy;
-        if (y >= 0 && y < MAP_H && isWater(x, y)) destW = {x, y};
-      }
-    if (!originW || !destW) return false;
-    const waterPath = bfsWater(originW.x, originW.y, (x,y) => x === destW.x && y === destW.y);
-    if (!waterPath || waterPath.length === 0) return false;
-    d.path = waterPath;
-  } else if (mode !== 'walk') {
-    const minRoad = mode === 'train' ? T.RAILROAD : mode === 'car' ? T.ASPHALT : T.PATH;
-    const vPath = findVehicleRoute(city, dest, minRoad);
-    if (!vPath || vPath.length === 0) return false;
-    d.path = vPath;
+  const preferred = bestTravelMode(city, dest);
+  const candidates = [];
+  if (preferred === 'ship') {
+    candidates.push('ship', 'walk');
   } else {
-    const wp = bfs(d.x, d.y, (x,y) => Math.abs(x-dest.mx) <= 2 && Math.abs(y-dest.my) <= 2 && isWalkable(x,y), false);
-    if (!wp || wp.length > 200) return false;
-    d.path = wp;
+    const startIdx = TRAVEL_DOWNSHIFT.indexOf(preferred);
+    for (let i = startIdx >= 0 ? startIdx : TRAVEL_DOWNSHIFT.length - 1; i < TRAVEL_DOWNSHIFT.length; i++) {
+      candidates.push(TRAVEL_DOWNSHIFT[i]);
+    }
   }
-  d.state = 'traveling';
-  d.travelMode = mode;
-  d.target = { type:'travel', destCityId:dest.id };
-  log(`${d.name} ${tm.emoji} traveling to ${dest.name} by ${tm.label}`, 'system', 2, null, d.x, d.y);
-  addEvent(d, 'travel', `${tm.label} to ${dest.name}`);
-  return true;
+  for (const mode of candidates) {
+    let path = null;
+    if (mode === 'ship') path = tryShipPath(city, dest);
+    else if (mode === 'walk') path = tryWalkPath(d, dest);
+    else path = tryRoadPath(city, dest, mode);
+    if (!path) continue;
+    const tm = TRAVEL_MODES[mode];
+    d.path = path;
+    d.state = 'traveling';
+    d.travelMode = mode;
+    d.target = { type:'travel', destCityId:dest.id };
+    log(`${d.name} ${tm.emoji} traveling to ${dest.name} by ${tm.label}`, 'system', 2, null, d.x, d.y);
+    addEvent(d, 'travel', `${tm.label} to ${dest.name}`);
+    return true;
+  }
+  return false;
 }
 
 function tryTravel(d) {
@@ -379,7 +403,7 @@ function bfs(sx, sy, goalFn, walkToGoal) {
   const par = new Map();
   const dirs = [[0,-1],[1,0],[0,1],[-1,0]];
   let steps = 0;
-  while (pq.length > 0 && steps < 2000) {
+  while (pq.length > 0 && steps < 30000) {
     const [cost, cx, cy] = pq.pop(); steps++;
     const ck = key(cx, cy);
     if (cost > (dist.get(ck) ?? Infinity)) continue;
@@ -821,7 +845,7 @@ function findVehicleRoute(fromCity, toCity, minRoad) {
       parent.set(key, `${cx},${cy}`);
       queue.push([nx,ny]);
     }
-    if (visited.size > 2000) break;
+    if (visited.size > 30000) break;
   }
   return null;
 }
@@ -955,6 +979,9 @@ function aiIdle(d) {
   if (d.hunger < 40 && res.food > 0) { d.state = 'seek_food'; return; }
   if (d.energy < 30) { d.state = 'seek_sleep'; return; }
 
+  // Cargo-laden dwarves prefer travel — gets vehicles/ships rolling.
+  if ((d.carrying||0) >= carryCapacity(d) * 0.7 && Math.random() < 0.4 && tryTravel(d)) return;
+
   const minePath = bfs(d.x, d.y, (x,y) => G.map[y][x] === T.D_MINE, false);
   if (minePath) {
     const last = minePath[minePath.length-1];
@@ -1041,7 +1068,7 @@ function aiIdle(d) {
   }
   if (Math.random() < 0.01 && tryFoundSuburb(d)) return;
   if (Math.random() < 0.02 && tryRelocateToSuburb(d)) return;
-  if (Math.random() < 0.12 && tryTravel(d)) return;
+  if (Math.random() < 0.30 && tryTravel(d)) return;
   d.state = 'wander'; d.timer = 20 + Math.floor(Math.random() * 40);
 }
 
@@ -1351,7 +1378,7 @@ function autoConnectCities() {
       const dx = Math.min(Math.abs(a.mx - b.mx), MAP_W - Math.abs(a.mx - b.mx));
       const dy = Math.abs(a.my - b.my);
       const dist = dx + dy;
-      if (dist < bestDist && dist < 80) { bestDist = dist; bestPair = [a, b]; }
+      if (dist < bestDist && dist < 400) { bestDist = dist; bestPair = [a, b]; }
     }
   }
   if (!bestPair) return;
@@ -1377,7 +1404,7 @@ function autoConnectCities() {
     const cur = openSet.shift();
     const curKey = `${cur.x},${cur.y}`;
     if (curKey === goal) { found = true; break; }
-    if (gScore.size > 3000) break;
+    if (gScore.size > 30000) break;
     for (const [dx, dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
       const nx = wrapX(cur.x + dx), ny = cur.y + dy;
       if (ny < 0 || ny >= MAP_H) continue;
@@ -1440,7 +1467,7 @@ function rebuildRoadGraph() {
       const queue = [[startCity.mx, startCity.my]];
       visited.add(`${startCity.mx},${startCity.my}`);
       let steps = 0;
-      while (queue.length > 0 && steps < 2000) {
+      while (queue.length > 0 && steps < 30000) {
         const [cx,cy] = queue.shift(); steps++;
         for (const [dx,dy] of [[1,0],[-1,0],[0,1],[0,-1]]) {
           const nx = wrapX(cx+dx), ny = cy+dy;
@@ -2229,6 +2256,9 @@ function executeIntent(d) {
     case 'explore': case 'wander':
       d.state = 'wander'; d.timer = 30+Math.floor(Math.random()*50);
       log(`${d.name} 🤖 AI: ${intent.reason}`, 'system', 2); return true;
+    case 'travel':
+      if (tryTravel(d)) { log(`${d.name} 🤖 AI: ${intent.reason}`, 'system', 2); return true; }
+      return false;
     case 'pray':
       d.state = 'wander'; d.timer = 10;
       d.happiness = Math.min(100, d.happiness + 3);
@@ -2442,6 +2472,7 @@ function startTickLoop() {
         id:d.id,name:d.name,x:d.x,y:d.y,cityId:d.cityId,color:d.color,
         hunger:d.hunger,energy:d.energy,happiness:d.happiness,
         state:d.state, target:d.target?{type:d.target.type}:null,
+        travelMode:d.travelMode||null,
         stats:d.stats,faith:d.faith,morality:d.morality,ambition:d.ambition,age:d.age,
         traits:d.traits,backstory:d.backstory,eventLog:d.eventLog?.slice(-50),
         carrying:d.carrying||0,carryItems:d.carryItems||{},

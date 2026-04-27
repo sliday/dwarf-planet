@@ -51,7 +51,7 @@ describe('Zod Schema Validation', () => {
     });
 
     it('accepts all simple action types', () => {
-      const actions = ['eat', 'drink', 'sleep', 'rest', 'mine', 'build', 'farm', 'craft', 'cook', 'brew', 'haul', 'chop', 'pray', 'wander', 'walk', 'explore'];
+      const actions = ['eat', 'drink', 'sleep', 'rest', 'mine', 'build', 'farm', 'craft', 'cook', 'brew', 'haul', 'chop', 'pray', 'wander', 'walk', 'explore', 'travel'];
       for (const action of actions) {
         const result = SimpleDecisionSchema.safeParse({
           decisions: [{ dwarfId: 'd_test', action, reason: 'test' }],
