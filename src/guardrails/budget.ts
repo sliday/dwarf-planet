@@ -8,18 +8,33 @@ const MAX_CENTS_PER_HOUR: Record<Tier, number> = {
   premium: 500,  // $5.00
 };
 
+const PROJECTED_CENTS_PER_CALL: Record<Tier, number> = {
+  simple: 1,
+  medium: 1,
+  complex: 2,
+  premium: 4,
+};
+
 function currentHour(): string {
   return new Date().toISOString().slice(0, 13).replace('T', '-');
 }
 
-export async function checkBudget(db: D1Database, tier: Tier): Promise<boolean> {
+export function getProjectedCostCents(tier: Tier, requestCount = 1): number {
+  return PROJECTED_CENTS_PER_CALL[tier] * Math.max(1, requestCount);
+}
+
+export async function checkBudget(
+  db: D1Database,
+  tier: Tier,
+  projectedCostCents = getProjectedCostCents(tier)
+): Promise<boolean> {
   const hour = currentHour();
   const row = await db.prepare(
     'SELECT cost_cents FROM budget_log WHERE tier = ? AND hour = ?'
   ).bind(tier, hour).first<{ cost_cents: number }>();
 
   const spent = row?.cost_cents ?? 0;
-  return spent < MAX_CENTS_PER_HOUR[tier];
+  return spent + Math.max(0, projectedCostCents) <= MAX_CENTS_PER_HOUR[tier];
 }
 
 export async function logUsage(

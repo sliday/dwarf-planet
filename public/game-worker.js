@@ -63,18 +63,32 @@ function bestTravelMode(origin, dest) {
   return 'walk';
 }
 
-function tryShipPath(city, dest) {
-  let originW = null, destW = null;
-  for (let dy = -4; dy <= 4 && !originW; dy++)
-    for (let dx = -4; dx <= 4 && !originW; dx++) {
+function findCityWater(city) {
+  if (!city || city.mx === undefined) return null;
+  let fallback = null, best = null, bestDist = Infinity;
+  for (let dy = -4; dy <= 4; dy++)
+    for (let dx = -4; dx <= 4; dx++) {
       const x = wrapX(city.mx+dx), y = city.my+dy;
-      if (y >= 0 && y < MAP_H && isWater(x, y)) originW = {x, y};
+      if (y < 0 || y >= MAP_H || !isWater(x, y)) continue;
+      if (!fallback) fallback = {x, y};
+      let hasLand = false;
+      for (const [ddx, ddy] of [[0,-1],[1,0],[0,1],[-1,0],[1,-1],[-1,-1],[1,1],[-1,1]]) {
+        const lx = wrapX(x + ddx), ly = y + ddy;
+        if (ly >= 0 && ly < MAP_H && isWalkable(lx, ly)) { hasLand = true; break; }
+      }
+      if (!hasLand) continue;
+      const dist = Math.abs(dx) + Math.abs(dy);
+      if (dist < bestDist) {
+        best = {x, y};
+        bestDist = dist;
+      }
     }
-  for (let dy = -4; dy <= 4 && !destW; dy++)
-    for (let dx = -4; dx <= 4 && !destW; dx++) {
-      const x = wrapX(dest.mx+dx), y = dest.my+dy;
-      if (y >= 0 && y < MAP_H && isWater(x, y)) destW = {x, y};
-    }
+  return best || fallback;
+}
+
+function tryShipPath(city, dest) {
+  const originW = findCityWater(city);
+  const destW = findCityWater(dest);
   if (!originW || !destW) return null;
   const waterPath = bfsWater(originW.x, originW.y, (x,y) => x === destW.x && y === destW.y);
   return (waterPath && waterPath.length > 0) ? waterPath : null;
@@ -90,6 +104,53 @@ function tryWalkPath(d, dest) {
   const wp = bfs(d.x, d.y, (x,y) => Math.abs(x-dest.mx) <= 2 && Math.abs(y-dest.my) <= 2 && isWalkable(x,y), false);
   if (!wp || wp.length === 0 || wp.length > 2000) return null;
   return wp;
+}
+
+function tryRouteAccessPath(d, targets) {
+  for (const [tx, ty] of targets) {
+    if (d.x === tx && d.y === ty) return [];
+  }
+  const targetKeys = new Set(targets.map(([tx, ty]) => `${tx},${ty}`));
+  const accessPath = bfs(d.x, d.y, (x,y) => targetKeys.has(`${x},${y}`), false);
+  return (accessPath && accessPath.length > 0) ? accessPath : null;
+}
+
+function routeIndex(route, x, y) {
+  return route.findIndex(([rx, ry]) => rx === x && ry === y);
+}
+
+function tryVehicleTravelPath(d, city, dest, mode) {
+  const route = tryRoadPath(city, dest, mode);
+  if (!route) return null;
+  if (d.x === city.mx && d.y === city.my) return route;
+  const accessPath = tryRouteAccessPath(d, [[city.mx, city.my], ...route.slice(0, -1)]);
+  if (accessPath == null) return null;
+  if (accessPath.length === 0) {
+    const idx = routeIndex(route, d.x, d.y);
+    return idx >= 0 ? route.slice(idx + 1) : route;
+  }
+  const [tx, ty] = accessPath[accessPath.length - 1];
+  if (tx === city.mx && ty === city.my) return accessPath.concat(route);
+  const idx = routeIndex(route, tx, ty);
+  return idx >= 0 ? accessPath.concat(route.slice(idx + 1)) : accessPath.concat(route);
+}
+
+function tryShipTravelPath(d, city, dest) {
+  const route = tryShipPath(city, dest);
+  if (!route) return null;
+  if (d.x === city.mx && d.y === city.my) return route;
+  const originW = findCityWater(city);
+  if (!originW) return null;
+  const embarkTargets = [];
+  for (const [dx, dy] of [[0,-1],[1,0],[0,1],[-1,0],[1,-1],[-1,-1],[1,1],[-1,1]]) {
+    const x = wrapX(originW.x + dx), y = originW.y + dy;
+    if (y >= 0 && y < MAP_H && isWalkable(x, y)) embarkTargets.push([x, y]);
+  }
+  if (!embarkTargets.length) return null;
+  const accessPath = tryRouteAccessPath(d, embarkTargets);
+  if (accessPath == null) return null;
+  const waterEntry = [[originW.x, originW.y]];
+  return accessPath.length > 0 ? accessPath.concat(waterEntry, route) : waterEntry.concat(route);
 }
 
 // Mode chain — when preferred mode pathfind fails, downshift to next-best.
@@ -108,9 +169,9 @@ function tryTravelTo(d, city, dest) {
   }
   for (const mode of candidates) {
     let path = null;
-    if (mode === 'ship') path = tryShipPath(city, dest);
+    if (mode === 'ship') path = tryShipTravelPath(d, city, dest);
     else if (mode === 'walk') path = tryWalkPath(d, dest);
-    else path = tryRoadPath(city, dest, mode);
+    else path = tryVehicleTravelPath(d, city, dest, mode);
     if (!path) continue;
     const tm = TRAVEL_MODES[mode];
     d.path = path;

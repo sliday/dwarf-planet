@@ -927,7 +927,7 @@ const G = {
   animals: [],
   stats: { mined: 0, built: 0, farmed: 0 },
   mapDeltas: {},
-  graves: {}, yearResolutions: [], suburbs: [],
+  graves: {}, yearResolutions: [], suburbs: [], dirtTiles: [],
   cam: { x: 0, y: 0 },
   mode: 'normal', drag: null, sel: null,
   hovTile: null, mapDirty: true,
@@ -957,6 +957,13 @@ let gameWorker = null, workerActive = false;
 // Helper: find city by id
 function cityById(id) { return CITIES.find(c => c.id === id) || G.suburbs?.find(s => s.id === id); }
 function cityOf(d) { return cityById(d.cityId) || CITIES[0]; }
+function setWorldTile(x, y, tile, opts = {}) {
+  const wx = wrapX(x);
+  if (y < 0 || y >= MAP_H) return;
+  G.map[y][wx] = tile;
+  if (opts.trackDelta !== false) G.mapDeltas[`${wx},${y}`] = tile;
+  if (opts.markDirty !== false) G.mapDirty = true;
+}
 function nearestCity(x, y) {
   let best = null, bestDist = Infinity;
   for (const c of CITIES) {
@@ -2332,7 +2339,7 @@ function aiMine(d) {
     const { x, y } = d.target;
     const tile = G.map[y][x];
     if (tile === T.D_MINE || tile === T.MOUNTAIN || tile === T.HILL) {
-      G.map[y][x] = T.FLOOR;
+      setWorldTile(x, y, T.FLOOR);
       const stoneAmt = 2 + Math.floor(Math.random() * 3);
       addCarry(d, 'stone', stoneAmt);
       G.stats.mined++;
@@ -2343,14 +2350,12 @@ function aiMine(d) {
       addEvent(d, 'mine', `Mined ${stoneAmt} stone${extra}`);
       d.happiness = Math.min(100, d.happiness + 2);
       tryCraftInventoryGain(d, tile);
-      G.mapDirty = true;
     } else if (d.target.type === 'chop' && (tile === T.FOREST || tile === T.TAIGA || tile === T.JUNGLE)) {
-      G.map[y][x] = T.PLAINS;
+      setWorldTile(x, y, T.PLAINS);
       addCarry(d, 'wood', 3);
       log(`${d.name} \uD83EA93 chopped wood`, 'haul');
       addEvent(d, 'chop', 'Chopped wood');
       tryCraftInventoryGain(d, tile);
-      G.mapDirty = true;
     }
     d.target = null; d.timer = 0;
     // If full, go deposit; otherwise idle
@@ -2368,35 +2373,30 @@ function aiBuild(d) {
     const res = cityOf(d).res;
     if (!res) { d.state = 'idle'; d.target = null; return; }
     if (G.map[y][x] === T.D_BUILD && res.stone >= 2) {
-      res.stone -= 2; G.map[y][x] = T.WALL; G.stats.built++;
+      res.stone -= 2; setWorldTile(x, y, T.WALL); G.stats.built++;
       log(`${d.name} 🧱 built a wall`, 'build');
       addEvent(d, 'build', 'Built a wall');
       d.happiness = Math.min(100, d.happiness + 3);
-      G.mapDirty = true;
     } else if (G.map[y][x] === T.D_ROAD) {
-      G.map[y][x] = T.PATH; G.stats.built++;
+      setWorldTile(x, y, T.PATH); G.stats.built++;
       log(`${d.name} 👣 cleared a dirt path`, 'build');
       addEvent(d, 'build', 'Cleared a path');
       d.happiness = Math.min(100, d.happiness + 1);
-      G.mapDirty = true;
     } else if (d.target.type === 'upgrade_road' && G.map[y][x] === T.PATH && res.stone >= 1) {
-      res.stone -= 1; G.map[y][x] = T.ROAD; G.stats.built++;
+      res.stone -= 1; setWorldTile(x, y, T.ROAD); G.stats.built++;
       log(`${d.name} 🟫 paved path to gravel road`, 'build');
       addEvent(d, 'build', 'Paved path to gravel');
       d.happiness = Math.min(100, d.happiness + 2);
-      G.mapDirty = true;
     } else if (d.target.type === 'upgrade_road' && G.map[y][x] === T.ROAD && res.stone >= 2 && res.iron >= 1) {
-      res.stone -= 2; res.iron -= 1; G.map[y][x] = T.ASPHALT; G.stats.built++;
+      res.stone -= 2; res.iron -= 1; setWorldTile(x, y, T.ASPHALT); G.stats.built++;
       log(`${d.name} ⬛ paved road to asphalt!`, 'build');
       addEvent(d, 'build', 'Paved road to asphalt');
       d.happiness = Math.min(100, d.happiness + 3);
-      G.mapDirty = true;
     } else if (d.target.type === 'upgrade_road' && G.map[y][x] === T.ASPHALT && res.iron >= 3 && res.wood >= 2) {
-      res.iron -= 3; res.wood -= 2; G.map[y][x] = T.RAILROAD; G.stats.built++;
+      res.iron -= 3; res.wood -= 2; setWorldTile(x, y, T.RAILROAD); G.stats.built++;
       log(`${d.name} 🟰 upgraded to railroad!`, 'build');
       addEvent(d, 'build', 'Upgraded to railroad');
       d.happiness = Math.min(100, d.happiness + 5);
-      G.mapDirty = true;
     }
     d.target = null; d.timer = 0; d.state = 'idle';
   }
@@ -2409,11 +2409,10 @@ function aiFarm(d) {
   if (d.timer >= dur) {
     const { x, y } = d.target;
     if (G.map[y][x] === T.D_FARM) {
-      G.map[y][x] = T.FARM; G.stats.farmed++;
+      setWorldTile(x, y, T.FARM); G.stats.farmed++;
       log(`${d.name} 🌱 planted a farm`, 'farm');
       addEvent(d, 'farm', 'Planted a farm');
       d.happiness = Math.min(100, d.happiness + 2);
-      G.mapDirty = true;
     }
     d.target = null; d.timer = 0; d.state = 'idle';
   }
@@ -2429,56 +2428,56 @@ function aiGather(d) {
     if (currentTile === tile) {
       switch (tile) {
         case T.BERRY_BUSH:
-          addCarry(d, 'food', 3); G.map[y][x] = T.PLAINS; G.mapDirty = true;
+          addCarry(d, 'food', 3); setWorldTile(x, y, T.PLAINS);
           log(`${d.name} \uD83E\uDED0 gathered berries (+3 food)`, 'farm');
           addEvent(d, 'gather', 'Gathered berries');
           d.hunger = Math.min(100, d.hunger + 15);
           break;
         case T.HERB_PATCH:
-          addCarry(d, 'herbs', 2); G.map[y][x] = T.PLAINS; G.mapDirty = true;
+          addCarry(d, 'herbs', 2); setWorldTile(x, y, T.PLAINS);
           log(`${d.name} \uD83C\uDF3F gathered herbs (+2 herbs)`, 'farm');
           addEvent(d, 'gather', 'Gathered herbs');
           break;
         case T.IRON_ORE:
-          addCarry(d, 'iron', 2); addCarry(d, 'stone', 1); G.map[y][x] = T.HILL; G.mapDirty = true;
+          addCarry(d, 'iron', 2); addCarry(d, 'stone', 1); setWorldTile(x, y, T.HILL);
           log(`${d.name} \u2699\uFE0F mined iron ore (+2 iron)`, 'mine');
           addEvent(d, 'gather', 'Mined iron ore');
           break;
         case T.GOLD_VEIN:
-          addCarry(d, 'gold', 2); G.map[y][x] = T.MOUNTAIN; G.mapDirty = true;
+          addCarry(d, 'gold', 2); setWorldTile(x, y, T.MOUNTAIN);
           log(`${d.name} \u2728 found gold (+2 gold)`, 'mine');
           addEvent(d, 'gather', 'Mined gold vein');
           break;
         case T.GEMS:
-          addCarry(d, 'gold', 5); G.map[y][x] = T.MOUNTAIN; G.mapDirty = true;
+          addCarry(d, 'gold', 5); setWorldTile(x, y, T.MOUNTAIN);
           log(`${d.name} \uD83D\uDC8E discovered gems! (+5 gold)`, 'mine');
           addEvent(d, 'gather', 'Discovered gems!');
           d.happiness = Math.min(100, d.happiness + 10);
           break;
         case T.FISH_SPOT:
-          addCarry(d, 'food', 4); G.map[y][x] = T.OCEAN; G.mapDirty = true;
+          addCarry(d, 'food', 4); setWorldTile(x, y, T.OCEAN);
           log(`${d.name} \uD83D\uDC1F caught fish (+4 food)`, 'farm');
           addEvent(d, 'gather', 'Caught fish');
           d.hunger = Math.min(100, d.hunger + 10);
           break;
         case T.CRAB:
-          addCarry(d, 'food', 2); G.map[y][x] = T.BEACH; G.mapDirty = true;
+          addCarry(d, 'food', 2); setWorldTile(x, y, T.BEACH);
           log(`${d.name} \uD83E\uDD80 caught crabs (+2 food)`, 'farm');
           addEvent(d, 'gather', 'Caught crabs');
           d.hunger = Math.min(100, d.hunger + 8);
           break;
         case T.DEER:
-          addCarry(d, 'food', 6); addCarry(d, 'cloth', 1); G.map[y][x] = T.PLAINS; G.mapDirty = true;
+          addCarry(d, 'food', 6); addCarry(d, 'cloth', 1); setWorldTile(x, y, T.PLAINS);
           log(`${d.name} \uD83E\uDD8C hunted game (+6 food, +1 cloth)`, 'mine');
           addEvent(d, 'gather', 'Hunted wild game');
           break;
         case T.CLAY:
-          addCarry(d, 'stone', 2); G.map[y][x] = T.BEACH; G.mapDirty = true;
+          addCarry(d, 'stone', 2); setWorldTile(x, y, T.BEACH);
           log(`${d.name} \uD83C\uDFFA gathered clay (+2 stone)`, 'haul');
           addEvent(d, 'gather', 'Gathered clay');
           break;
         case T.CORAL:
-          addCarry(d, 'gold', 1); G.map[y][x] = T.OCEAN; G.mapDirty = true;
+          addCarry(d, 'gold', 1); setWorldTile(x, y, T.OCEAN);
           log(`${d.name} \uD83E\uDEB8 harvested coral (+1 gold)`, 'farm');
           addEvent(d, 'gather', 'Harvested coral');
           break;
@@ -2576,6 +2575,39 @@ function aiTravel(d) {
     const [nx, ny] = d.path.shift();
     d.x = nx; d.y = ny;
   }
+}
+
+function tryTravelFallback(d) {
+  const city = cityOf(d);
+  if (!city || city.mx === undefined || city.my === undefined) return false;
+  if (d.hunger < 30 || d.energy < 25) return false;
+  const candidates = CITIES
+    .filter(c => c.id !== city.id && c.mx !== undefined && c.my !== undefined)
+    .sort((a, b) => {
+      const da = Math.min(Math.abs(a.mx - city.mx), MAP_W - Math.abs(a.mx - city.mx)) + Math.abs(a.my - city.my);
+      const db = Math.min(Math.abs(b.mx - city.mx), MAP_W - Math.abs(b.mx - city.mx)) + Math.abs(b.my - city.my);
+      return da - db;
+    })
+    .slice(0, 5);
+
+  for (const dest of candidates) {
+    const path = bfs(
+      d.x,
+      d.y,
+      (x, y) => Math.abs(x - dest.mx) <= 2 && Math.abs(y - dest.my) <= 2 && isWalkable(x, y),
+      false
+    );
+    if (!path || path.length === 0 || path.length > 2000) continue;
+    d.path = path;
+    d.state = 'traveling';
+    d.travelMode = 'walk';
+    d.target = { type: 'travel', destCityId: dest.id };
+    log(`${d.name} 🚶 traveling to ${dest.name} by Walking`, 'system', 2, null, d.x, d.y);
+    addEvent(d, 'travel', `Walking to ${dest.name}`);
+    return true;
+  }
+
+  return false;
 }
 
 // ---- Animals (fallback single-thread) ----
@@ -2780,10 +2812,10 @@ function tryFoundCity(d) {
     for (let dx = -1; dx <= 1; dx++) {
       const x = wrapX(cx + dx), y = cy + dy;
       if (y < 0 || y >= MAP_H) continue;
-      if (dx === 0 && dy === 0) G.map[y][x] = T.CITY;
-      else if (dy === -1) { G.map[y][x] = T.BED; newCity.res.beds++; }
-      else if (dy === 1) G.map[y][x] = T.STOCKPILE;
-      else G.map[y][x] = T.FLOOR;
+      if (dx === 0 && dy === 0) setWorldTile(x, y, T.CITY);
+      else if (dy === -1) { setWorldTile(x, y, T.BED); newCity.res.beds++; }
+      else if (dy === 1) setWorldTile(x, y, T.STOCKPILE);
+      else setWorldTile(x, y, T.FLOOR);
     }
   }
   // Transfer both dwarves to new city
@@ -2829,7 +2861,7 @@ function aiEat(d) {
       const expected = src === 'mushroom' ? T.MUSHROOM : src === 'berry' ? T.BERRY_BUSH : T.CRAB;
       const revert = src === 'crab' ? T.BEACH : T.PLAINS;
       if (G.map[y] && G.map[y][x] === expected) {
-        G.map[y][x] = revert; G.mapDirty = true;
+        setWorldTile(x, y, revert);
         const amt = src === 'mushroom' ? 40 : src === 'berry' ? 35 : 25;
         d.hunger = Math.min(100, d.hunger + Math.round(amt * statMod(effectiveStat(d, 'WIS'))));
         const emoji = src === 'mushroom' ? '🍄' : src === 'berry' ? '🫐' : '🦀';
@@ -3007,16 +3039,16 @@ function tickSeason() {
                 // Decide what to build: cycle bed/stockpile/table/floor
                 const pick = (expanded + cityPop) % 4;
                 if (pick === 0 && r.stone >= 3 && r.wood >= 1) {
-                  G.map[y][x] = T.BED; r.stone -= 2; r.wood -= 1; r.beds++;
+                  setWorldTile(x, y, T.BED); r.stone -= 2; r.wood -= 1; r.beds++;
                   expanded++;
                 } else if (pick === 1 && r.stone >= 2) {
-                  G.map[y][x] = T.STOCKPILE; r.stone -= 2;
+                  setWorldTile(x, y, T.STOCKPILE); r.stone -= 2;
                   expanded++;
                 } else if (pick === 2 && r.wood >= 2) {
-                  G.map[y][x] = T.TABLE; r.wood -= 2; r.tables++;
+                  setWorldTile(x, y, T.TABLE); r.wood -= 2; r.tables++;
                   expanded++;
                 } else if (r.stone >= 1) {
-                  G.map[y][x] = T.FLOOR; r.stone -= 1;
+                  setWorldTile(x, y, T.FLOOR); r.stone -= 1;
                   expanded++;
                 }
               }
@@ -3035,15 +3067,15 @@ function tickSeason() {
         const t = G.map[ry][rx];
         // Mushrooms in forests
         if ((t === T.FOREST || t === T.JUNGLE || t === T.TAIGA) && Math.random() < 0.3) {
-          G.map[ry][rx] = T.MUSHROOM; G.mapDirty = true;
+          setWorldTile(rx, ry, T.MUSHROOM);
         }
         // Berry bushes in forests/plains
         if ((t === T.FOREST || t === T.TAIGA || t === T.PLAINS) && Math.random() < 0.15) {
-          G.map[ry][rx] = T.BERRY_BUSH; G.mapDirty = true;
+          setWorldTile(rx, ry, T.BERRY_BUSH);
         }
         // Herbs in plains/jungle
         if ((t === T.PLAINS || t === T.JUNGLE) && Math.random() < 0.12) {
-          G.map[ry][rx] = T.HERB_PATCH; G.mapDirty = true;
+          setWorldTile(rx, ry, T.HERB_PATCH);
         }
         // Fish in ocean near coast
         if (t === T.OCEAN && Math.random() < 0.2) {
@@ -3053,15 +3085,15 @@ function tickSeason() {
               const nx = wrapX(rx + dx), ny = ry + dy;
               if (ny >= 0 && ny < MAP_H && G.map[ny][nx] !== T.OCEAN && G.map[ny][nx] !== T.FISH_SPOT) nearLand = true;
             }
-          if (nearLand) { G.map[ry][rx] = T.FISH_SPOT; G.mapDirty = true; }
+          if (nearLand) setWorldTile(rx, ry, T.FISH_SPOT);
         }
         // Crabs on beaches
         if (t === T.BEACH && Math.random() < 0.15) {
-          G.map[ry][rx] = T.CRAB; G.mapDirty = true;
+          setWorldTile(rx, ry, T.CRAB);
         }
         // Deer in forests/plains
         if ((t === T.FOREST || t === T.PLAINS || t === T.TAIGA) && Math.random() < 0.04) {
-          G.map[ry][rx] = T.DEER; G.mapDirty = true;
+          setWorldTile(rx, ry, T.DEER);
         }
       }
     }
@@ -4554,14 +4586,14 @@ function finalizeDesignation() {
     for (let y = s.y1; y <= s.y2; y++)
       for (let gx = s.x1; gx <= s.x2; gx++) {
         const x = wrapX(gx);
-        if (minable.has(G.map[y][x])) { G.map[y][x] = T.D_MINE; count++; }
+        if (minable.has(G.map[y][x])) { setWorldTile(x, y, T.D_MINE); count++; }
       }
     if (count) log(`⛏️ Designated ${count} tiles for mining (${formatCost(cost)})`, 'mine', 2);
   } else if (G.mode === 'farm') {
     for (let y = s.y1; y <= s.y2; y++)
       for (let gx = s.x1; gx <= s.x2; gx++) {
         const x = wrapX(gx);
-        if (buildable.has(G.map[y][x])) { G.map[y][x] = T.D_FARM; count++; }
+        if (buildable.has(G.map[y][x])) { setWorldTile(x, y, T.D_FARM); count++; }
       }
     if (count) log(`🌱 Designated ${count} farm plots (${formatCost(cost)})`, 'farm', 2);
   } else if (G.mode === 'road') {
@@ -4571,8 +4603,8 @@ function finalizeDesignation() {
     for (let y = s.y1; y <= s.y2; y++)
       for (let gx = s.x1; gx <= s.x2; gx++) {
         const x = wrapX(gx);
-        if (roadable.has(G.map[y][x])) { G.map[y][x] = T.D_ROAD; count++; }
-        else if (upgradeable.has(G.map[y][x])) { G.map[y][x] = T.D_UPGRADE; count++; upgradeCount++; }
+        if (roadable.has(G.map[y][x])) { setWorldTile(x, y, T.D_ROAD); count++; }
+        else if (upgradeable.has(G.map[y][x])) { setWorldTile(x, y, T.D_UPGRADE); count++; upgradeCount++; }
       }
     if (count) log(`🛤️ Designated ${count} road tiles (${formatCost(cost)})`, 'build', 2);
   }
@@ -5099,6 +5131,9 @@ function executeIntent(d) {
       d.state = 'wander'; d.timer = 30 + Math.floor(Math.random() * 50);
       log(`${d.name} 🤖 AI: ${intent.reason}`, 'system');
       return true;
+    case 'travel':
+      if (tryTravelFallback(d)) { log(`${d.name} 🤖 AI: ${intent.reason}`, 'system'); return true; }
+      return false;
     case 'pray':
       d.state = 'wander'; d.timer = 10;
       d.happiness = Math.min(100, d.happiness + 3);
@@ -5164,6 +5199,11 @@ function getSerializableState() {
       hp: d.hp, maxHp: d.maxHp, ac: d.ac, poisonTicks: d.poisonTicks || 0, pet: d.pet || null,
       sex: d.sex || 'M',
       travelMode: d.travelMode || null,
+      sponsored: d.sponsored || false,
+      sponsorTier: d.sponsorTier || null,
+      sponsorCallsRemaining: d.sponsorCallsRemaining || 0,
+      starveTicks: d.starveTicks || 0,
+      relationships: d.relationships || [],
     })),
     animals: G.animals.map(a => ({
       id:a.id,type:a.type,x:a.x,y:a.y,hp:a.hp,maxHp:a.maxHp,ac:a.ac,
@@ -5172,6 +5212,10 @@ function getSerializableState() {
     stats: G.stats,
     homeCity: G.homeCity ? { name: G.homeCity.name, mx: G.homeCity.mx, my: G.homeCity.my } : null,
     mapDeltas: G.mapDeltas || {},
+    graves: G.graves || {},
+    yearResolutions: G.yearResolutions || [],
+    suburbs: G.suburbs || [],
+    dirtTiles: G.dirtTiles || [],
   };
 }
 
@@ -5670,9 +5714,10 @@ async function restoreState() {
   const saved = await loadGameState();
   if (!saved) return;
 
-  G.tick = saved.tick || 0;
-  G.year = saved.year || 1;
-  G.season = saved.season || 0;
+  G.tick = saved.tick ?? 0;
+  G.year = saved.year ?? 1;
+  G.season = saved.season ?? 0;
+  G.speed = saved.speed ?? G.speed;
   G.stats = { ...G.stats, ...saved.stats };
 
   // Restore per-city resources
@@ -5696,6 +5741,13 @@ async function restoreState() {
         carrying: sd.carrying || 0, carryItems: sd.carryItems || {},
         inventory: sd.inventory || [],
         sex: sd.sex || d.sex,
+        hp: sd.hp ?? d.hp, maxHp: sd.maxHp ?? d.maxHp, ac: sd.ac ?? d.ac,
+        poisonTicks: sd.poisonTicks || 0, pet: sd.pet || null,
+        travelMode: sd.travelMode ?? null,
+        sponsored: sd.sponsored || false, sponsorTier: sd.sponsorTier || null,
+        sponsorCallsRemaining: sd.sponsorCallsRemaining || 0,
+        starveTicks: sd.starveTicks || 0,
+        relationships: sd.relationships || [],
       });
       d.target = null; d.path = [];
       if (!isWalkable(d.x, d.y)) {
@@ -5725,7 +5777,7 @@ async function restoreState() {
     for (const [key, tile] of Object.entries(saved.mapDeltas)) {
       const [x, y] = key.split(',').map(Number);
       if (y >= 0 && y < MAP_H && x >= 0 && x < MAP_W) {
-        G.map[y][x] = tile;
+        setWorldTile(x, y, tile, { trackDelta: false, markDirty: false });
       }
     }
     tileBuffer = null; // Force re-render of tile cache
@@ -5734,6 +5786,8 @@ async function restoreState() {
   // Restore graves
   if (saved.graves) G.graves = saved.graves;
   if (saved.yearResolutions) G.yearResolutions = saved.yearResolutions;
+  if (saved.suburbs) G.suburbs = saved.suburbs;
+  if (saved.dirtTiles) G.dirtTiles = saved.dirtTiles;
 
   // Ensure minimum population: at least 2 dwarves per city
   for (const city of CITIES) {
@@ -5846,7 +5900,7 @@ function initWorker() {
         // Apply map deltas
         if (data.mapChanges.length) {
           for (const ch of data.mapChanges) {
-            G.map[ch.y][ch.x] = ch.tile;
+            setWorldTile(ch.x, ch.y, ch.tile, { markDirty: false });
             pendingTilePatches.push(ch);
           }
           mmDirty = true;
@@ -5916,6 +5970,9 @@ function initWorker() {
       aiCityIndex: G.aiCityIndex,
       mapDeltas: G.mapDeltas || {},
       graves: G.graves || {},
+      yearResolutions: G.yearResolutions || [],
+      suburbs: G.suburbs || [],
+      dirtTiles: G.dirtTiles || [],
     },
   }, [flat.buffer]);
 

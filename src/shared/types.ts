@@ -37,6 +37,22 @@ export interface DwarfState {
   ambition?: number;
   traits?: string[];
   backstory?: string;
+  age?: number;
+  timer?: number;
+  carrying?: number;
+  carryItems?: Record<string, number>;
+  inventory?: Array<{ emoji: string; name: string }>;
+  hp?: number;
+  maxHp?: number;
+  ac?: number;
+  poisonTicks?: number;
+  pet?: string | null;
+  sex?: 'M' | 'F';
+  travelMode?: 'walk' | 'cart' | 'car' | 'train' | 'ship' | null;
+  sponsored?: boolean;
+  sponsorTier?: string | null;
+  sponsorCallsRemaining?: number;
+  starveTicks?: number;
   eventLog?: EventLogEntry[];
   relationships?: Relationship[];
 }
@@ -61,8 +77,14 @@ export interface GameState {
   speed: number;
   cityResources?: Record<string, ResourcePool>;
   dwarves: DwarfState[];
+  animals?: Array<Record<string, unknown>>;
   stats: { mined: number; built: number; farmed: number };
   homeCity: { name: string; mx: number; my: number } | null;
+  mapDeltas?: Record<string, number>;
+  graves?: Record<string, unknown>;
+  yearResolutions?: Array<Record<string, unknown>>;
+  suburbs?: Array<Record<string, unknown>>;
+  dirtTiles?: Array<Record<string, unknown>>;
   religions?: Religion[];
 }
 

@@ -1,4 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { readFileSync } from 'node:fs';
+import { createContext, runInContext } from 'node:vm';
 
 const MAP_W = 500, MAP_H = 250;
 const T = {
@@ -59,6 +61,51 @@ function buildMap() {
     }
     map.push(row);
   }
+}
+
+type WorkerHooks = {
+  tryTravelTo: (d: any, city: any, dest: any) => boolean;
+  findVehicleRoute: (city: any, dest: any, minRoad: number) => Array<[number, number]> | null;
+  tryShipPath: (city: any, dest: any) => Array<[number, number]> | null;
+  G: { roadGraph?: Record<string, any> };
+  T: Record<string, number>;
+  MAP_W: number;
+  MAP_H: number;
+  setCities: (cities: any[]) => void;
+  setMap: (map: Uint8Array[]) => void;
+};
+
+function loadWorkerHooks(): WorkerHooks {
+  const workerCode = readFileSync(new URL('../public/game-worker.js', import.meta.url), 'utf8') + `
+self.__testHooks = {
+  tryTravelTo,
+  findVehicleRoute,
+  tryShipPath,
+  G,
+  T,
+  MAP_W,
+  MAP_H,
+  setCities: (cities) => { CITIES = cities; },
+  setMap: (map) => { G.map = map; },
+};`;
+  const context: Record<string, any> = {
+    self: {},
+    setTimeout: () => 0,
+    clearTimeout: () => {},
+    setInterval: () => 0,
+    clearInterval: () => {},
+    Uint8Array,
+    console,
+    Math,
+    fetch: async () => ({ ok: false, json: async () => ({}) }),
+  };
+  createContext(context);
+  runInContext(workerCode, context);
+  return context.self.__testHooks as WorkerHooks;
+}
+
+function buildWorkerMap(worker: WorkerHooks, fill: number) {
+  return Array.from({ length: worker.MAP_H }, () => new Uint8Array(worker.MAP_W).fill(fill));
 }
 
 beforeEach(() => buildMap());
@@ -181,5 +228,93 @@ describe('inter-city connector range', () => {
   const CONNECTOR_MAX_DIST = 400;
   it('accepts pairs within 400 tiles', () => {
     expect(CONNECTOR_MAX_DIST).toBeGreaterThanOrEqual(400);
+  });
+});
+
+describe('live worker travel continuity', () => {
+  let worker: WorkerHooks;
+
+  beforeEach(() => {
+    worker = loadWorkerHooks();
+  });
+
+  it('walks back into the origin road network before vehicle travel from the field', () => {
+    const map = buildWorkerMap(worker, worker.T.PLAINS);
+    const cityA = { id:'a', name:'A', mx:100, my:100, res:{} };
+    const cityB = { id:'b', name:'B', mx:120, my:100, res:{} };
+    map[cityA.my][cityA.mx] = worker.T.CITY;
+    map[cityB.my][cityB.mx] = worker.T.CITY;
+    for (let x = cityA.mx + 1; x < cityB.mx; x++) map[cityA.my][x] = worker.T.PATH;
+    worker.setMap(map);
+    worker.setCities([cityA, cityB]);
+    worker.G.roadGraph = { 'a-b': { path:true } };
+    const directRoute = worker.findVehicleRoute(cityA, cityB, worker.T.PATH);
+    const dwarf: any = { id:'d', name:'D', x:100, y:103, eventLog:[], carryItems:{}, inventory:[] };
+
+    expect(worker.tryTravelTo(dwarf, cityA, cityB)).toBe(true);
+    expect(dwarf.travelMode).toBe('cart');
+    expect(dwarf.path.slice(0, 4)).toEqual([[100, 102], [100, 101], [100, 100], [101, 100]]);
+    expect(directRoute).not.toBeNull();
+    expect(dwarf.path.slice(3)).toEqual(directRoute);
+  });
+
+  it('preserves the direct city-origin vehicle route', () => {
+    const map = buildWorkerMap(worker, worker.T.PLAINS);
+    const cityA = { id:'a', name:'A', mx:100, my:100, res:{} };
+    const cityB = { id:'b', name:'B', mx:120, my:100, res:{} };
+    map[cityA.my][cityA.mx] = worker.T.CITY;
+    map[cityB.my][cityB.mx] = worker.T.CITY;
+    for (let x = cityA.mx + 1; x < cityB.mx; x++) map[cityA.my][x] = worker.T.PATH;
+    worker.setMap(map);
+    worker.setCities([cityA, cityB]);
+    worker.G.roadGraph = { 'a-b': { path:true } };
+    const directRoute = worker.findVehicleRoute(cityA, cityB, worker.T.PATH);
+    const dwarf: any = { id:'d', name:'D', x:cityA.mx, y:cityA.my, eventLog:[], carryItems:{}, inventory:[] };
+
+    expect(worker.tryTravelTo(dwarf, cityA, cityB)).toBe(true);
+    expect(dwarf.travelMode).toBe('cart');
+    expect(dwarf.path).toEqual(directRoute);
+  });
+
+  it('walks to an embark tile before joining ship travel from the field', () => {
+    const map = buildWorkerMap(worker, worker.T.PLAINS);
+    for (let y = 0; y <= 4; y++) map[y].fill(worker.T.OCEAN);
+    const cityA = { id:'a', name:'A', mx:20, my:7, res:{} };
+    const cityB = { id:'b', name:'B', mx:60, my:7, res:{} };
+    map[cityA.my][cityA.mx] = worker.T.CITY;
+    map[cityB.my][cityB.mx] = worker.T.CITY;
+    worker.setMap(map);
+    worker.setCities([cityA, cityB]);
+    worker.G.roadGraph = {};
+    const shipRoute = worker.tryShipPath(cityA, cityB);
+    const dwarf: any = { id:'d', name:'D', x:20, y:20, eventLog:[], carryItems:{}, inventory:[] };
+
+    expect(worker.tryTravelTo(dwarf, cityA, cityB)).toBe(true);
+    expect(dwarf.travelMode).toBe('ship');
+    expect(dwarf.path[0]).toEqual([20, 19]);
+    expect(dwarf.path).toContainEqual([20, 5]);
+    const waterEntryIndex = dwarf.path.findIndex(([x, y]: [number, number]) => x === 20 && y === 4);
+    expect(waterEntryIndex).toBeGreaterThan(0);
+    expect(dwarf.path[waterEntryIndex - 1]).toEqual([20, 5]);
+    expect(shipRoute).not.toBeNull();
+    expect(dwarf.path.slice(waterEntryIndex + 1)).toEqual(shipRoute);
+  });
+
+  it('preserves the direct city-origin ship route', () => {
+    const map = buildWorkerMap(worker, worker.T.PLAINS);
+    for (let y = 0; y <= 4; y++) map[y].fill(worker.T.OCEAN);
+    const cityA = { id:'a', name:'A', mx:20, my:7, res:{} };
+    const cityB = { id:'b', name:'B', mx:60, my:7, res:{} };
+    map[cityA.my][cityA.mx] = worker.T.CITY;
+    map[cityB.my][cityB.mx] = worker.T.CITY;
+    worker.setMap(map);
+    worker.setCities([cityA, cityB]);
+    worker.G.roadGraph = {};
+    const shipRoute = worker.tryShipPath(cityA, cityB);
+    const dwarf: any = { id:'d', name:'D', x:cityA.mx, y:cityA.my, eventLog:[], carryItems:{}, inventory:[] };
+
+    expect(worker.tryTravelTo(dwarf, cityA, cityB)).toBe(true);
+    expect(dwarf.travelMode).toBe('ship');
+    expect(dwarf.path).toEqual(shipRoute);
   });
 });

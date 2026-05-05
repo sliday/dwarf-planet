@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { checkBudget, logUsage } from '../src/guardrails/budget';
+import { checkBudget, getProjectedCostCents } from '../src/guardrails/budget';
 
 // Mock D1Database
 function createMockDB() {
@@ -149,6 +149,26 @@ describe('Budget Tracker', () => {
       const hour = new Date().toISOString().slice(0, 13).replace('T', '-');
       db._setData(`budget:simple:${hour}`, { tier: 'simple', hour, calls: 99, cost_cents: 49 });
       expect(await checkBudget(db, 'simple')).toBe(true);
+    });
+
+    it('blocks when projected spend would overshoot the remaining budget', async () => {
+      const hour = new Date().toISOString().slice(0, 13).replace('T', '-');
+      db._setData(`budget:simple:${hour}`, { tier: 'simple', hour, calls: 99, cost_cents: 49 });
+      expect(await checkBudget(db, 'simple', 2)).toBe(false);
+    });
+
+    it('allows when projected spend fits the remaining budget', async () => {
+      const hour = new Date().toISOString().slice(0, 13).replace('T', '-');
+      db._setData(`budget:complex:${hour}`, { tier: 'complex', hour, calls: 12, cost_cents: 198 });
+      expect(await checkBudget(db, 'complex', 2)).toBe(true);
+    });
+  });
+
+  describe('getProjectedCostCents', () => {
+    it('scales with the number of requests in a batch', () => {
+      expect(getProjectedCostCents('medium', 1)).toBe(1);
+      expect(getProjectedCostCents('medium', 3)).toBe(3);
+      expect(getProjectedCostCents('premium', 2)).toBe(8);
     });
   });
 

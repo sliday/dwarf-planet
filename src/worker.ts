@@ -4,7 +4,7 @@ import { Polar } from '@polar-sh/sdk';
 import { validateEvent, WebhookVerificationError } from '@polar-sh/sdk/webhooks';
 import type { Env, Tier, GameState } from './shared/types';
 import { routeDecision, generateBackstory, generateCraftResult, generateEpitaph } from './ai/router';
-import { checkBudget, logUsage } from './guardrails/budget';
+import { checkBudget, getProjectedCostCents, logUsage } from './guardrails/budget';
 import { checkRateLimit } from './guardrails/rate-limiter';
 import { saveState, loadState } from './db/state';
 
@@ -15,11 +15,50 @@ const SPONSOR_TIERS = {
 } as const;
 
 type SponsorTier = keyof typeof SPONSOR_TIERS;
+type ActiveSponsorshipRow = {
+  id: number;
+  dwarf_id: string;
+  ai_tier: Tier;
+  created_at: string | null;
+  activated_at: string | null;
+};
 
 type HonoEnv = { Bindings: Env };
 
 const app = new Hono<HonoEnv>();
 app.use('/*', cors());
+
+const TIER_RANK: Record<Tier, number> = { simple: 0, medium: 1, complex: 2, premium: 3 };
+
+function compareSponsorshipRows(a: ActiveSponsorshipRow, b: ActiveSponsorshipRow): number {
+  const tierDiff = TIER_RANK[a.ai_tier] - TIER_RANK[b.ai_tier];
+  if (tierDiff !== 0) return tierDiff;
+  const aTime = a.activated_at ?? a.created_at ?? '';
+  const bTime = b.activated_at ?? b.created_at ?? '';
+  const timeDiff = aTime.localeCompare(bTime);
+  if (timeDiff !== 0) return timeDiff;
+  return a.id - b.id;
+}
+
+function selectEffectiveSponsorships(rows: ActiveSponsorshipRow[]): ActiveSponsorshipRow[] {
+  const selected = new Map<string, ActiveSponsorshipRow>();
+  for (const row of rows) {
+    const current = selected.get(row.dwarf_id);
+    if (!current || compareSponsorshipRows(row, current) > 0) {
+      selected.set(row.dwarf_id, row);
+    }
+  }
+  return [...selected.values()];
+}
+
+async function loadActiveSponsorships(db: D1Database, dwarfIds: string[]): Promise<ActiveSponsorshipRow[]> {
+  if (!dwarfIds.length) return [];
+  const placeholders = dwarfIds.map(() => '?').join(',');
+  const sponsored = await db.prepare(
+    `SELECT id, dwarf_id, ai_tier, created_at, activated_at FROM dwarf_sponsorships WHERE dwarf_id IN (${placeholders}) AND status='active' AND calls_remaining > 0`
+  ).bind(...dwarfIds).all();
+  return selectEffectiveSponsorships((sponsored.results || []) as ActiveSponsorshipRow[]);
+}
 
 // Health / budget status
 app.get('/api/health', async (c) => {
@@ -56,50 +95,41 @@ app.post('/api/decide/:tier', async (c) => {
     return c.json({ error: 'Invalid tier' }, 400);
   }
 
-  const rateLimitOk = checkRateLimit(tier);
-  if (!rateLimitOk) {
-    return c.json({ error: 'Rate limited', fallback: true }, 429);
-  }
-
-  const budgetOk = await checkBudget(c.env.DB, tier);
-  if (!budgetOk) {
-    return c.json({ error: 'Budget exceeded', fallback: true }, 429);
-  }
-
   try {
-    const body = await c.req.json();
-
-    // Check if any dwarf in the batch has an active sponsorship for a tier upgrade
+    const body = await c.req.json<any>();
+    const dwarfIds: string[] = Array.isArray(body.dwarves)
+      ? Array.from(new Set<string>(body.dwarves.map((d: any) => d?.id).filter((id: any): id is string => typeof id === 'string' && id.length > 0)))
+      : [];
     let effectiveTier = tier;
-    const sponsoredDwarfIds: string[] = [];
-    if (body.dwarves?.length) {
-      const placeholders = body.dwarves.map(() => '?').join(',');
-      const ids = body.dwarves.map((d: any) => d.id);
-      const sponsored = await c.env.DB.prepare(
-        `SELECT dwarf_id, ai_tier FROM dwarf_sponsorships WHERE dwarf_id IN (${placeholders}) AND status='active' AND calls_remaining > 0`
-      ).bind(...ids).all();
-
-      const tierRank: Record<string, number> = { simple: 0, medium: 1, complex: 2, premium: 3 };
-      for (const row of (sponsored.results || []) as any[]) {
-        sponsoredDwarfIds.push(row.dwarf_id);
-        if (tierRank[row.ai_tier] > tierRank[effectiveTier]) {
-          effectiveTier = row.ai_tier as Tier;
-        }
+    const activeSponsorships = await loadActiveSponsorships(c.env.DB, dwarfIds);
+    const sponsoredDwarfIds = activeSponsorships.map((row) => row.dwarf_id);
+    for (const row of activeSponsorships) {
+      if (TIER_RANK[row.ai_tier] > TIER_RANK[effectiveTier]) {
+        effectiveTier = row.ai_tier;
       }
+    }
+
+    const rateLimitOk = checkRateLimit(effectiveTier);
+    if (!rateLimitOk) {
+      return c.json({ error: 'Rate limited', fallback: true }, 429);
+    }
+
+    const budgetOk = await checkBudget(c.env.DB, effectiveTier, getProjectedCostCents(effectiveTier));
+    if (!budgetOk) {
+      return c.json({ error: 'Budget exceeded', fallback: true }, 429);
     }
 
     const result = await routeDecision(effectiveTier, body, c.env.OPENROUTER_API_KEY);
 
     await logUsage(c.env.DB, effectiveTier, result.model, result.tokensIn, result.tokensOut, result.costCents);
 
-    // Decrement calls for sponsored dwarves
-    for (const dwarfId of sponsoredDwarfIds) {
+    for (const sponsorship of activeSponsorships) {
       await c.env.DB.prepare(
-        "UPDATE dwarf_sponsorships SET calls_remaining = calls_remaining - 1 WHERE dwarf_id=? AND status='active' AND calls_remaining > 0"
-      ).bind(dwarfId).run();
+        "UPDATE dwarf_sponsorships SET calls_remaining = calls_remaining - 1 WHERE id=? AND status='active' AND calls_remaining > 0"
+      ).bind(sponsorship.id).run();
       await c.env.DB.prepare(
-        "UPDATE dwarf_sponsorships SET status='expired', expired_at=datetime('now') WHERE dwarf_id=? AND calls_remaining <= 0 AND status='active'"
-      ).bind(dwarfId).run();
+        "UPDATE dwarf_sponsorships SET status='expired', expired_at=datetime('now') WHERE id=? AND calls_remaining <= 0 AND status='active'"
+      ).bind(sponsorship.id).run();
     }
 
     return c.json({
@@ -143,7 +173,7 @@ app.post('/api/backstory', async (c) => {
   const rateLimitOk = checkRateLimit('medium');
   if (!rateLimitOk) return c.json({ error: 'Rate limited' }, 429);
 
-  const budgetOk = await checkBudget(c.env.DB, 'medium');
+  const budgetOk = await checkBudget(c.env.DB, 'medium', getProjectedCostCents('medium'));
   if (!budgetOk) return c.json({ error: 'Budget exceeded' }, 429);
 
   try {
@@ -162,12 +192,11 @@ app.post('/api/backstory/batch', async (c) => {
   const rateLimitOk = checkRateLimit('medium');
   if (!rateLimitOk) return c.json({ error: 'Rate limited' }, 429);
 
-  const budgetOk = await checkBudget(c.env.DB, 'medium');
-  if (!budgetOk) return c.json({ error: 'Budget exceeded' }, 429);
-
   try {
     const { dwarves } = await c.req.json<{ dwarves: any[] }>();
     const batch = (dwarves || []).slice(0, 10);
+    const budgetOk = await checkBudget(c.env.DB, 'medium', getProjectedCostCents('medium', batch.length));
+    if (!budgetOk) return c.json({ error: 'Budget exceeded' }, 429);
     const results: any[] = [];
     for (const dwarf of batch) {
       try {
@@ -235,7 +264,7 @@ app.post('/api/craft', async (c) => {
     }
 
     // Not cached — call AI
-    const budgetOk = await checkBudget(db, 'simple');
+    const budgetOk = await checkBudget(db, 'simple', getProjectedCostCents('simple'));
     if (!budgetOk) return c.json({ error: 'Budget exceeded' }, 429);
 
     const aiResult = await generateCraftResult(a, b, c.env.OPENROUTER_API_KEY);
@@ -264,6 +293,9 @@ app.post('/api/craft', async (c) => {
 app.post('/api/epitaph', async (c) => {
   const rateLimitOk = checkRateLimit('simple');
   if (!rateLimitOk) return c.json({ error: 'Rate limited' }, 429);
+
+  const budgetOk = await checkBudget(c.env.DB, 'simple', getProjectedCostCents('simple'));
+  if (!budgetOk) return c.json({ error: 'Budget exceeded' }, 429);
 
   try {
     const body = await c.req.json<{ name: string; cause: string; age: number; cityName?: string }>();
@@ -345,9 +377,10 @@ app.get('/api/sponsor/total', async (c) => {
 });
 
 app.get('/api/sponsor/status/:dwarfId', async (c) => {
-  const row = await c.env.DB.prepare(
-    "SELECT * FROM dwarf_sponsorships WHERE dwarf_id=? AND status='active' AND calls_remaining > 0 ORDER BY created_at DESC LIMIT 1"
-  ).bind(c.req.param('dwarfId')).first();
+  const rows = await c.env.DB.prepare(
+    "SELECT * FROM dwarf_sponsorships WHERE dwarf_id=? AND status='active' AND calls_remaining > 0"
+  ).bind(c.req.param('dwarfId')).all();
+  const [row] = selectEffectiveSponsorships((rows.results || []) as ActiveSponsorshipRow[]);
   return c.json({ sponsorship: row || null });
 });
 
@@ -362,12 +395,8 @@ app.get('/api/sponsor/list', async (c) => {
 app.get('/success', async (c) => {
   const checkoutId = c.req.query('checkout_id') || '';
   let dwarfId = '';
-  // Auto-activate: user landed here = Polar charged them
   if (checkoutId) {
     try {
-      await c.env.DB.prepare(
-        "UPDATE dwarf_sponsorships SET status='active', activated_at=datetime('now') WHERE checkout_id=? AND status='pending'"
-      ).bind(checkoutId).run();
       const row = await c.env.DB.prepare(
         "SELECT dwarf_id FROM dwarf_sponsorships WHERE checkout_id=?"
       ).bind(checkoutId).first<{ dwarf_id: string }>();
@@ -380,7 +409,7 @@ app.get('/success', async (c) => {
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Sponsorship Complete - Dwarf Land</title>
+<title>Sponsorship Received - Dwarf Land</title>
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/daub-ui@latest/daub.css">
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🧔</text></svg>">
 <style>body{min-height:100vh;display:flex;align-items:center;justify-content:center;font-family:'Courier New',monospace}</style>
@@ -388,8 +417,8 @@ app.get('/success', async (c) => {
 <body>
 <div class="db-card" style="max-width:480px;text-align:center;padding:32px">
   <div style="font-size:64px;margin-bottom:16px">⭐</div>
-  <h1 class="db-h3" style="margin-bottom:8px">Brain Upgraded!</h1>
-  <p class="db-body" style="margin-bottom:24px">Your sponsored dwarf now has enhanced AI reasoning. They'll make smarter decisions for a limited number of turns.</p>
+  <h1 class="db-h3" style="margin-bottom:8px">Sponsorship Received</h1>
+  <p class="db-body" style="margin-bottom:24px">Polar still needs to confirm the payment. The verified webhook will activate your dwarf's AI upgrade as soon as that check lands.</p>
   <p class="db-caption" style="margin-bottom:24px;opacity:0.6">Checkout: ${checkoutId.slice(0, 8)}...</p>
   <a href="${returnUrl}" class="db-btn db-btn--primary">Return to Dwarf Land</a>
 </div>
