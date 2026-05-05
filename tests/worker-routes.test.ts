@@ -254,6 +254,89 @@ describe('Worker routes', () => {
     expect(db.sponsorships.find((row) => row.id === 2)?.calls_remaining).toBe(7);
   });
 
+  it('expires the selected sponsorship row when the final call is consumed', async () => {
+    const db = new MockDB([createSponsorship({ calls_remaining: 1, calls_total: 1 })]);
+
+    const response = await app.request(
+      '/api/decide/simple',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ dwarves: [{ id: 'dwarf-1' }] }),
+      },
+      createEnv(db)
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.sponsorships[0].calls_remaining).toBe(0);
+    expect(db.sponsorships[0].status).toBe('expired');
+    expect(db.sponsorships[0].expired_at).toBeTruthy();
+  });
+
+  it('does not decrement sponsored calls when the effective tier is rate limited', async () => {
+    const db = new MockDB([createSponsorship({ calls_remaining: 5 })]);
+    rateLimiterMocks.checkRateLimit.mockReturnValue(false);
+
+    const response = await app.request(
+      '/api/decide/simple',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ dwarves: [{ id: 'dwarf-1' }] }),
+      },
+      createEnv(db)
+    );
+
+    expect(response.status).toBe(429);
+    expect(rateLimiterMocks.checkRateLimit).toHaveBeenCalledWith('premium');
+    expect(budgetMocks.checkBudget).not.toHaveBeenCalled();
+    expect(routerMocks.routeDecision).not.toHaveBeenCalled();
+    expect(db.sponsorships[0].calls_remaining).toBe(5);
+  });
+
+  it('deduplicates repeated dwarf ids before sponsorship accounting', async () => {
+    const db = new MockDB([createSponsorship({ calls_remaining: 5 })]);
+
+    const response = await app.request(
+      '/api/decide/simple',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ dwarves: [{ id: 'dwarf-1' }, { id: 'dwarf-1' }] }),
+      },
+      createEnv(db)
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.sponsoredDwarfIds).toEqual(['dwarf-1']);
+    expect(db.sponsorships[0].calls_remaining).toBe(4);
+  });
+
+  it('uses the highest sponsored tier across a multi-dwarf request', async () => {
+    const db = new MockDB([
+      createSponsorship({ id: 1, dwarf_id: 'dwarf-1', tier: 'bronze', ai_tier: 'medium', amount_cents: 100 }),
+      createSponsorship({ id: 2, dwarf_id: 'dwarf-2', checkout_id: 'chk-2', tier: 'silver', ai_tier: 'complex', amount_cents: 300 }),
+    ]);
+
+    const response = await app.request(
+      '/api/decide/simple',
+      {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ dwarves: [{ id: 'dwarf-1' }, { id: 'dwarf-2' }] }),
+      },
+      createEnv(db)
+    );
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(rateLimiterMocks.checkRateLimit).toHaveBeenCalledWith('complex');
+    expect(budgetMocks.checkBudget).toHaveBeenCalledWith(expect.anything(), 'complex', 2);
+    expect(payload.sponsoredDwarfIds).toEqual(['dwarf-1', 'dwarf-2']);
+    expect(db.sponsorships.map((row) => row.calls_remaining)).toEqual([4, 4]);
+  });
+
   it('enforces budget on /api/epitaph', async () => {
     const db = new MockDB();
     budgetMocks.checkBudget.mockResolvedValue(false);

@@ -276,6 +276,27 @@ describe('live worker travel continuity', () => {
     expect(dwarf.path).toEqual(directRoute);
   });
 
+  it('continues from the current route tile instead of returning to the origin city', () => {
+    const map = buildWorkerMap(worker, worker.T.PLAINS);
+    const cityA = { id:'a', name:'A', mx:100, my:100, res:{} };
+    const cityB = { id:'b', name:'B', mx:120, my:100, res:{} };
+    map[cityA.my][cityA.mx] = worker.T.CITY;
+    map[cityB.my][cityB.mx] = worker.T.CITY;
+    for (let x = cityA.mx + 1; x < cityB.mx; x++) map[cityA.my][x] = worker.T.PATH;
+    worker.setMap(map);
+    worker.setCities([cityA, cityB]);
+    worker.G.roadGraph = { 'a-b': { path:true } };
+    const directRoute = worker.findVehicleRoute(cityA, cityB, worker.T.PATH);
+    const dwarf: any = { id:'d', name:'D', x:105, y:100, eventLog:[], carryItems:{}, inventory:[] };
+
+    expect(worker.tryTravelTo(dwarf, cityA, cityB)).toBe(true);
+    expect(dwarf.travelMode).toBe('cart');
+    expect(dwarf.path[0]).toEqual([106, 100]);
+    expect(dwarf.path).not.toContainEqual([100, 100]);
+    expect(directRoute).not.toBeNull();
+    expect(dwarf.path).toEqual(directRoute!.slice(5));
+  });
+
   it('walks to an embark tile before joining ship travel from the field', () => {
     const map = buildWorkerMap(worker, worker.T.PLAINS);
     for (let y = 0; y <= 4; y++) map[y].fill(worker.T.OCEAN);

@@ -176,6 +176,18 @@ describe('Sponsorship routes', () => {
     expect(html).toContain('/?dwarfId=dwarf-1');
   });
 
+  it('keeps the success page return link generic for unknown checkout ids', async () => {
+    const db = new MockDB([createSponsorship()]);
+
+    const response = await app.request('/success?checkout_id=missing', undefined, createEnv(db));
+    const html = await response.text();
+
+    expect(response.status).toBe(200);
+    expect(html).toContain('href="/"');
+    expect(html).not.toContain('dwarfId=');
+    expect(db.sponsorships[0].status).toBe('pending');
+  });
+
   it('activates sponsorships only from a verified webhook event', async () => {
     const db = new MockDB([createSponsorship()]);
     webhookMocks.validateEvent.mockReturnValue({
@@ -198,6 +210,51 @@ describe('Sponsorship routes', () => {
     expect(db.sponsorships[0].status).toBe('active');
     expect(db.sponsorships[0].activated_at).toBeTruthy();
     expect(webhookMocks.validateEvent).toHaveBeenCalledWith('payload', expect.any(Object), 'polar-secret');
+  });
+
+  it('ignores verified webhook events that are not paid orders', async () => {
+    const db = new MockDB([createSponsorship()]);
+    webhookMocks.validateEvent.mockReturnValue({
+      type: 'order.created',
+      data: { checkoutId: 'chk-1' },
+    });
+
+    const response = await app.request(
+      '/api/sponsor/webhook',
+      {
+        method: 'POST',
+        headers: { 'polar-signature': 'sig' },
+        body: 'payload',
+      },
+      createEnv(db)
+    );
+
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe('ok');
+    expect(db.sponsorships[0].status).toBe('pending');
+    expect(db.sponsorships[0].activated_at).toBeNull();
+  });
+
+  it('does not activate a paid webhook without a checkout id', async () => {
+    const db = new MockDB([createSponsorship()]);
+    webhookMocks.validateEvent.mockReturnValue({
+      type: 'order.paid',
+      data: {},
+    });
+
+    const response = await app.request(
+      '/api/sponsor/webhook',
+      {
+        method: 'POST',
+        headers: { 'polar-signature': 'sig' },
+        body: 'payload',
+      },
+      createEnv(db)
+    );
+
+    expect(response.status).toBe(200);
+    expect(db.sponsorships[0].status).toBe('pending');
+    expect(db.sponsorships[0].activated_at).toBeNull();
   });
 
   it('rejects invalid webhook signatures', async () => {
@@ -246,5 +303,18 @@ describe('Sponsorship routes', () => {
     expect(response.status).toBe(200);
     expect(payload.sponsorship.ai_tier).toBe('premium');
     expect(payload.sponsorship.id).toBe(2);
+  });
+
+  it('returns null when a dwarf has no active calls remaining', async () => {
+    const db = new MockDB([
+      createSponsorship({ id: 1, status: 'active', calls_remaining: 0 }),
+      createSponsorship({ id: 2, status: 'expired', calls_remaining: 20 }),
+    ]);
+
+    const response = await app.request('/api/sponsor/status/dwarf-1', undefined, createEnv(db));
+    const payload = await response.json();
+
+    expect(response.status).toBe(200);
+    expect(payload.sponsorship).toBeNull();
   });
 });

@@ -162,6 +162,12 @@ describe('Budget Tracker', () => {
       db._setData(`budget:complex:${hour}`, { tier: 'complex', hour, calls: 12, cost_cents: 198 });
       expect(await checkBudget(db, 'complex', 2)).toBe(true);
     });
+
+    it('blocks complex tier when the default projected call would cross the cap', async () => {
+      const hour = new Date().toISOString().slice(0, 13).replace('T', '-');
+      db._setData(`budget:complex:${hour}`, { tier: 'complex', hour, calls: 12, cost_cents: 199 });
+      expect(await checkBudget(db, 'complex')).toBe(false);
+    });
   });
 
   describe('getProjectedCostCents', () => {
@@ -169,6 +175,11 @@ describe('Budget Tracker', () => {
       expect(getProjectedCostCents('medium', 1)).toBe(1);
       expect(getProjectedCostCents('medium', 3)).toBe(3);
       expect(getProjectedCostCents('premium', 2)).toBe(8);
+    });
+
+    it('charges at least one projected call for empty or negative request counts', () => {
+      expect(getProjectedCostCents('simple', 0)).toBe(1);
+      expect(getProjectedCostCents('complex', -5)).toBe(2);
     });
   });
 
