@@ -94,6 +94,21 @@ describe('client state contract', () => {
     expect(indexHtml).toContain("if (isMobile) inspPanel.classList.add('open'); else inspPanel.style.display = 'block';");
   });
 
+  it('auto-refreshes floating aggregate panels while they stay open', () => {
+    expect(indexHtml).toContain("} else if (inspCurrent.type === 'population') {");
+    expect(indexHtml).toContain('showPopulationPanel()');
+    expect(indexHtml).toContain("} else if (inspCurrent.type === 'travel') {");
+    expect(indexHtml).toContain('showTravelPanel()');
+    expect(indexHtml).toContain("} else if (inspCurrent.type === 'timeline') {");
+    expect(indexHtml).toContain('showTimelinePanel()');
+    expect(indexHtml).toContain("} else if (inspCurrent.type === 'graveyard') {");
+    expect(indexHtml).toContain('showGraveyardPanel()');
+    expect(indexHtml).toContain("} else if (inspCurrent.type === 'grave') {");
+    expect(indexHtml).toContain('showGraveInspector(gx, gy, g)');
+    expect(indexHtml).toContain("} else if (inspCurrent.type === 'sponsored') {");
+    expect(indexHtml).toContain('showSponsoredPanel(false)');
+  });
+
   it('keeps worker save and restore fields aligned with browser saves', () => {
     expect(gameWorker).toContain('travelMode:d.travelMode||null');
     expect(gameWorker).toContain('starveTicks:d.starveTicks||0');

@@ -4155,6 +4155,22 @@ function updateHUD() {
       if (a) showAnimalInspector(a); else closeInspector();
     } else if (inspCurrent.type === 'resource') {
       showResourceRanking(inspCurrent.key);
+    } else if (inspCurrent.type === 'population') {
+      showPopulationPanel();
+    } else if (inspCurrent.type === 'travel') {
+      showTravelPanel();
+    } else if (inspCurrent.type === 'timeline') {
+      showTimelinePanel();
+    } else if (inspCurrent.type === 'graveyard') {
+      showGraveyardPanel();
+    } else if (inspCurrent.type === 'grave') {
+      const g = G.graves[inspCurrent.key];
+      if (g) {
+        const [gx, gy] = inspCurrent.key.split(',').map(Number);
+        showGraveInspector(gx, gy, g);
+      } else closeInspector();
+    } else if (inspCurrent.type === 'sponsored') {
+      showSponsoredPanel(false);
     }
     inspRefreshing = false;
   }
@@ -5720,7 +5736,7 @@ function showPopulationPanel() {
 document.getElementById('hud-pop-wrap').onclick = () => { popFilter = ''; positionInspectorBelow(document.getElementById('hud-pop-wrap')); showPopulationPanel(); };
 
 // Travel panel
-document.getElementById('hud-travel-wrap').onclick = () => {
+function showTravelPanel() {
   syncWorkerRouteDwarf(null);
   positionInspectorBelow(document.getElementById('hud-travel-wrap'));
   const travelers = G.dwarves.filter(d => d.state === 'traveling');
@@ -5761,10 +5777,12 @@ document.getElementById('hud-travel-wrap').onclick = () => {
   inspBody.textContent = '';
   inspBody.appendChild(frag);
   if (isMobile) { inspPanel.classList.add('open'); } else inspPanel.style.display = 'block';
-};
+  inspCurrent = { type: 'travel' };
+}
+document.getElementById('hud-travel-wrap').onclick = showTravelPanel;
 
 // Timeline panel
-document.getElementById('hud-year-wrap').onclick = () => {
+function showTimelinePanel() {
   syncWorkerRouteDwarf(null);
   positionInspectorBelow(document.getElementById('hud-year-wrap'));
   const seasonEmoji = SEASON_EMOJIS[G.season];
@@ -5848,7 +5866,8 @@ document.getElementById('hud-year-wrap').onclick = () => {
   inspPanel.classList.remove('hidden');
   if (isMobile) inspPanel.classList.add('open'); else inspPanel.style.display = 'block';
   inspCurrent = { type: 'timeline' };
-};
+}
+document.getElementById('hud-year-wrap').onclick = showTimelinePanel;
 
 // Graveyard panel
 const RANDOM_CAUSES = ['Fell in battle','Killed by a wolf','Killed by a bear','Killed by a spider','Died of old age','Starved to death','Lost at sea','Caught in a rockslide','Succumbed to poison','Died defending the city','Perished in the wilderness','Felled by a serpent','Taken by illness','Collapsed from exhaustion'];
@@ -5971,7 +5990,7 @@ function showGraveInspector(gx, gy, g) {
 }
 
 // Sponsored dwarves panel
-document.getElementById('hud-sponsored-wrap').onclick = async () => {
+async function showSponsoredPanel(fetchFooter = true) {
   positionInspectorBelow(document.getElementById('hud-sponsored-wrap'));
   const sponsored = G.dwarves.filter(d => d.sponsored);
   inspTitle.textContent = '⭐ Sponsored Dwarves';
@@ -6021,21 +6040,25 @@ document.getElementById('hud-sponsored-wrap').onclick = async () => {
     setTimeout(() => tip.remove(), 3000);
   };
   frag.appendChild(sponsorBtn);
-  try {
-    const res = await fetch(`${AI.apiBase}/api/sponsor/list`);
-    if (res.ok) {
-      const { sponsorships } = await res.json();
-      const total = sponsorships.reduce((s, r) => s + r.amount_cents, 0);
-      const footer = document.createElement('div');
-      footer.style.cssText = 'margin-top:8px;color:#928374;font-size:11px';
-      footer.textContent = 'Total: $' + (total / 100).toFixed(2) + ' · ' + sponsorships.length + ' sponsorship(s)';
-      frag.appendChild(footer);
-    }
-  } catch (_) {}
+  if (fetchFooter) {
+    try {
+      const res = await fetch(`${AI.apiBase}/api/sponsor/list`);
+      if (res.ok) {
+        const { sponsorships } = await res.json();
+        const total = sponsorships.reduce((s, r) => s + r.amount_cents, 0);
+        const footer = document.createElement('div');
+        footer.style.cssText = 'margin-top:8px;color:#928374;font-size:11px';
+        footer.textContent = 'Total: $' + (total / 100).toFixed(2) + ' · ' + sponsorships.length + ' sponsorship(s)';
+        frag.appendChild(footer);
+      }
+    } catch (_) {}
+  }
   inspBody.textContent = '';
   inspBody.appendChild(frag);
   if (isMobile) { inspPanel.classList.add('open'); } else inspPanel.style.display = 'block';
-};
+  inspCurrent = { type: 'sponsored' };
+}
+document.getElementById('hud-sponsored-wrap').onclick = () => showSponsoredPanel();
 
 async function restoreState() {
   const saved = await loadGameState();
