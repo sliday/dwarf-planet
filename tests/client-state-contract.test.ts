@@ -48,6 +48,14 @@ describe('client state contract', () => {
     expect(gameWorker).toContain('eventLog:d.eventLog?.slice(-50)');
   });
 
+  it('interpolates render positions without changing simulation coordinates', () => {
+    expect(indexHtml).toContain('function getEntityRenderPosition(entity, nowMs, snapTiles)');
+    expect(indexHtml).toContain('function unwrapRenderX(fromX, rawX)');
+    expect(indexHtml).toContain("const pos = getEntityRenderPosition(d, renderNowMs, d.state === 'traveling' ? 40 : 8)");
+    expect(indexHtml).toContain('const pos = getEntityRenderPosition(a, renderNowMs, 8)');
+    expect(indexHtml).toContain('const previousAnimals = new Map(G.animals.map(a => [a.id, a]))');
+  });
+
   it('keeps worker save and restore fields aligned with browser saves', () => {
     expect(gameWorker).toContain('travelMode:d.travelMode||null');
     expect(gameWorker).toContain('starveTicks:d.starveTicks||0');

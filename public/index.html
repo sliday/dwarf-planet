@@ -1016,6 +1016,8 @@ const ANIMAL_EMOJIS = {
 };
 const ANIMAL_DANGER = {monkey:1,wolf:1,bear:1,snake:1,fox:1,eagle:1,gorilla:1,boar:1,scorpion:1,bee:1,crocodile:1,spider:1,shark:1};
 const ANIMAL_PET = {cat:1,dog:1,parrot:1};
+const ENTITY_RENDER_MIN_MS = 70;
+const ENTITY_RENDER_MAX_MS = 170;
 
 const isMobile = 'ontouchstart' in window;
 if (isMobile) { document.body.classList.add('mobile'); G.zoom = 1.5; }
@@ -1026,6 +1028,34 @@ let gameWorker = null, workerActive = false;
 // Helper: find city by id
 function cityById(id) { return CITIES.find(c => c.id === id) || G.suburbs?.find(s => s.id === id); }
 function cityOf(d) { return cityById(d.cityId) || CITIES[0]; }
+function unwrapRenderX(fromX, rawX) { return rawX + Math.round((fromX - rawX) / MAP_W) * MAP_W; }
+function smoothstep(t) { return t * t * (3 - 2 * t); }
+function currentEntityRenderPosition(r, nowMs) {
+  if (!r || !r.duration || nowMs >= r.startedAt + r.duration) return { x: r?.toX ?? 0, y: r?.toY ?? 0 };
+  const t = Math.max(0, Math.min(1, (nowMs - r.startedAt) / r.duration));
+  const e = smoothstep(t);
+  return { x: r.fromX + (r.toX - r.fromX) * e, y: r.fromY + (r.toY - r.fromY) * e };
+}
+function getEntityRenderPosition(entity, nowMs, snapTiles) {
+  if (!entity._render) {
+    entity._render = { rawX: entity.x, rawY: entity.y, fromX: entity.x, fromY: entity.y, toX: entity.x, toY: entity.y, startedAt: nowMs, duration: 0, changedAt: nowMs };
+    return { x: entity.x, y: entity.y };
+  }
+  const r = entity._render;
+  const current = currentEntityRenderPosition(r, nowMs);
+  if (entity.x !== r.rawX || entity.y !== r.rawY) {
+    const targetX = unwrapRenderX(current.x, entity.x);
+    const dist = Math.hypot(targetX - current.x, entity.y - current.y);
+    if (dist > snapTiles) {
+      Object.assign(r, { rawX: entity.x, rawY: entity.y, fromX: entity.x, fromY: entity.y, toX: entity.x, toY: entity.y, startedAt: nowMs, duration: 0, changedAt: nowMs });
+      return { x: entity.x, y: entity.y };
+    }
+    const gap = Math.max(ENTITY_RENDER_MIN_MS, Math.min(ENTITY_RENDER_MAX_MS, nowMs - (r.changedAt || nowMs) || ENTITY_RENDER_MIN_MS));
+    Object.assign(r, { rawX: entity.x, rawY: entity.y, fromX: current.x, fromY: current.y, toX: targetX, toY: entity.y, startedAt: nowMs, duration: gap, changedAt: nowMs });
+    return currentEntityRenderPosition(r, nowMs);
+  }
+  return current;
+}
 function setWorldTile(x, y, tile, opts = {}) {
   const wx = wrapX(x);
   if (y < 0 || y >= MAP_H) return;
@@ -3557,6 +3587,7 @@ function renderTileBuffer(startGX, startGY, endGX, endGY) {
 function render() {
   renderFrameCount++;
   const w = canvas.width, h = canvas.height;
+  const renderNowMs = performance.now();
   ctx.fillStyle = '#042040';
   ctx.fillRect(0, 0, w, h);
 
@@ -3790,10 +3821,11 @@ function render() {
 
   // Draw dwarves
   for (const d of G.dwarves) {
+    const pos = getEntityRenderPosition(d, renderNowMs, d.state === 'traveling' ? 40 : 8);
     // Check both regular and wrapped positions
     for (const offset of [0, MAP_W, -MAP_W]) {
-      const px = (d.x + offset) * TILE - G.cam.x;
-      const py = d.y * TILE - G.cam.y;
+      const px = (pos.x + offset) * TILE - G.cam.x;
+      const py = pos.y * TILE - G.cam.y;
       if (px < -TILE || py < -TILE || px > w + TILE || py > h + TILE) continue;
 
       ctx.fillStyle = d.color;
@@ -3836,9 +3868,10 @@ function render() {
 
   // Draw animals
   for (const a of G.animals) {
+    const pos = getEntityRenderPosition(a, renderNowMs, 8);
     for (const offset of [0, MAP_W, -MAP_W]) {
-      const px = (a.x + offset) * TILE - G.cam.x;
-      const py = a.y * TILE - G.cam.y;
+      const px = (pos.x + offset) * TILE - G.cam.x;
+      const py = pos.y * TILE - G.cam.y;
       if (px < -TILE || py < -TILE || px > w + TILE || py > h + TILE) continue;
       const emoji = ANIMAL_EMOJIS[a.type] || '\uD83D\uDC3E';
       try { ctx.drawImage(getEmojiImg(emoji), px, py); } catch (e) {}
@@ -5969,8 +6002,9 @@ function gameLoop(ts) {
   if (G.followDwarf) {
     const fd = G.dwarves.find(d => d.id === G.followDwarf);
     if (fd) {
-      G.cam.x = fd.x * TILE - canvas.width / 2 + TILE / 2;
-      G.cam.y = fd.y * TILE - canvas.height / 2 + TILE / 2;
+      const pos = getEntityRenderPosition(fd, ts, fd.state === 'traveling' ? 40 : 8);
+      G.cam.x = pos.x * TILE - canvas.width / 2 + TILE / 2;
+      G.cam.y = pos.y * TILE - canvas.height / 2 + TILE / 2;
       } else {
       G.followDwarf = null;
     }
@@ -6026,9 +6060,10 @@ function initWorker() {
     switch (data.type) {
       case 'snapshot':
         const previousDwarves = new Map(G.dwarves.map(d => [d.id, d]));
+        const previousAnimals = new Map(G.animals.map(a => [a.id, a]));
         G.dwarves = data.dwarves.map(d => ({ ...previousDwarves.get(d.id), ...d }));
         if (Object.keys(G.sponsorMap).length) applySponsorships();
-        G.animals = data.animals || [];
+        G.animals = (data.animals || []).map(a => ({ ...previousAnimals.get(a.id), ...a }));
         G.tick = data.tick;
         G.year = data.year;
         G.season = data.season;
