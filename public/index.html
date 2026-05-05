@@ -4153,6 +4153,8 @@ function updateHUD() {
     } else if (inspCurrent.type === 'animal') {
       const a = G.animals.find(a => a.id === inspCurrent.id);
       if (a) showAnimalInspector(a); else closeInspector();
+    } else if (inspCurrent.type === 'resource') {
+      showResourceRanking(inspCurrent.key);
     }
     inspRefreshing = false;
   }
@@ -4664,7 +4666,7 @@ function showResourceRanking(resKey) {
     }
   }
   inspBody.textContent = ''; inspBody.appendChild(frag);
-  inspPanel.classList.remove('hidden');
+  if (isMobile) inspPanel.classList.add('open'); else inspPanel.style.display = 'block';
   inspCurrent = { type: 'resource', key: resKey };
 }
 

@@ -87,6 +87,13 @@ describe('client state contract', () => {
     expect(indexHtml).toContain('body { font-family: var(--ui-mono)');
   });
 
+  it('opens and refreshes resource ranking panels from HUD resource clicks', () => {
+    expect(indexHtml).toContain("span.onclick = (e) => { e.stopPropagation(); showResourceRanking(key); }");
+    expect(indexHtml).toContain("} else if (inspCurrent.type === 'resource') {");
+    expect(indexHtml).toContain('showResourceRanking(inspCurrent.key)');
+    expect(indexHtml).toContain("if (isMobile) inspPanel.classList.add('open'); else inspPanel.style.display = 'block';");
+  });
+
   it('keeps worker save and restore fields aligned with browser saves', () => {
     expect(gameWorker).toContain('travelMode:d.travelMode||null');
     expect(gameWorker).toContain('starveTicks:d.starveTicks||0');
